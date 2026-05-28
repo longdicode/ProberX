@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go version *)",
+      "Bash(go mod *)",
+      "Bash(npx tsc *)",
+      "Bash(./proberx-agent.exe)",
+      "Bash(curl -s http://localhost:9800/health)",
+      "Bash(curl -s http://localhost:3001/api/v1/workspaces -H \"Authorization: Bearer bypass\")",
+      "Bash(curl -s http://localhost:3001/api/v1/workspaces/09b8ce3d-31c7-436a-b708-16fcc5b6ae4a/probe-results -H 'Authorization: Bearer bypass')",
+      "Bash(curl -s http://localhost:3001/api/v1/workspaces/09b8ce3d-31c7-436a-b708-16fcc5b6ae4a/alert-events -H 'Authorization: Bearer bypass')",
+      "Bash(curl -s -X POST http://localhost:3001/api/v1/workspaces/09b8ce3d-31c7-436a-b708-16fcc5b6ae4a/monitors -H 'Authorization: Bearer bypass' -H 'Content-Type: application/json' -d '{\"name\":\"Test HTTP\",\"type\":\"http\",\"target\":\"https://httpbin.org/get\",\"intervalSec\":120,\"timeoutMs\":5000}')",
+      "Bash(curl -s -X POST http://localhost:3001/api/v1/workspaces/09b8ce3d-31c7-436a-b708-16fcc5b6ae4a/alerts -H 'Authorization: Bearer bypass' -H 'Content-Type: application/json' -d '{\"name\":\"CPU High\",\"targetType\":\"server\",\"metric\":\"cpu\",\"operator\":\"gt\",\"threshold\":90,\"severity\":\"critical\"}')",
+      "Bash(curl -s http://localhost:3001/api/v1/workspaces/09b8ce3d-31c7-436a-b708-16fcc5b6ae4a/monitors/f811ea63-6042-4c98-958c-bf9cea050150/results -H 'Authorization: Bearer bypass')",
+      "Bash(curl -s http://localhost:3001/api/v1/workspaces/09b8ce3d-31c7-436a-b708-16fcc5b6ae4a/alerts/9253ae8a-74df-4c98-a269-f006f6b5ecd5/events -H 'Authorization: Bearer bypass')",
+      "Bash(curl -s -X PATCH http://localhost:3001/api/v1/workspaces/09b8ce3d-31c7-436a-b708-16fcc5b6ae4a/alerts/9253ae8a-74df-4c98-a269-f006f6b5ecd5/events/00000000-0000-0000-0000-000000000000 -H 'Authorization: Bearer bypass')",
+      "Bash(go build *)",
+      "Bash(cmd *)",
+      "Bash(curl *)",
+      "Bash(tasklist)",
+      "Bash(npm run *)",
+      "Bash(DASHBOARD_URL=http://127.0.0.1:3001 ./agent.exe)",
+      "Bash(kill -9 3486)",
+      "Bash(ssh *)",
+      "Bash(where ngrok *)",
+      "Bash(winget install *)",
+      "Bash(unzip -o /tmp/ngrok.zip -d /tmp/)",
+      "Bash(echo \"Tunnel PID: $!\")",
+      "Bash(docker exec proberx-postgres-1 *)",
+      "Bash(echo \"Local tunnel PID: $!\")",
+      "Bash(scp agent *)",
+      "Bash(docker compose *)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "terminal"
+  ]
+}
