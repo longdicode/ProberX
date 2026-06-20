@@ -47,8 +47,11 @@ async function start() {
   {
     const cors = await import("@fastify/cors");
     const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:3000";
+    const origin = corsOrigin === "true" || corsOrigin === "*"
+      ? true
+      : corsOrigin.split(",").map(s => s.trim());
     await app.register(cors.default, {
-      origin: corsOrigin.split(",").map(s => s.trim()),
+      origin,
       credentials: true,
     });
   }
