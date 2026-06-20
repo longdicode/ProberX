@@ -18,3 +18,7 @@ export const metricsQuery = z.object({
   to: z.string().optional(),
   interval: z.coerce.number().optional(),
 }, undefined);
+
+export const alertRangeQuery = z.object({
+  range: z.enum(["24h", "7d", "30d"]).default("7d"),
+}, undefined);

@@ -8,3 +8,12 @@ Thumbs.db
 *.exe
 *.exe~
 .claude/settings.local.json
+# Agent binaries (built, not committed)
+apps/agent/agent_*
+apps/agent/agent-*
+# Private configs
+frp/
+# Duplicate dir
+website/
+# Claude AI
+.claude/

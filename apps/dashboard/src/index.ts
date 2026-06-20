@@ -5,6 +5,7 @@ import { dbPlugin } from "./plugins/db";
 import { authPlugin } from "./plugins/auth";
 import { redisPlugin } from "./plugins/redis";
 import { errorHandler } from "./plugins/error-handler";
+import { rateLimitPlugin } from "./plugins/rate-limit";
 import { authRoutes } from "./routes/auth";
 import { workspaceRoutes } from "./routes/workspaces";
 import { serverRoutes } from "./routes/servers";
@@ -18,13 +19,15 @@ import { publicRoutes } from "./routes/public";
 import { apiKeyRoutes } from "./routes/api-keys";
 import { membershipRoutes } from "./routes/memberships";
 import { toolsRoutes } from "./routes/tools";
+import { appStoreRoutes } from "./routes/app-store";
 import { wsPlugin } from "./ws/index";
-import { startMetricsPoller } from "./services/metrics-poller";
-import { startProbePoller } from "./services/probe-poller";
-import { startCronPoller } from "./services/cron-poller";
+import { startMetricsPoller, stopMetricsPoller } from "./services/metrics-poller";
+import { startProbePoller, stopProbePoller } from "./services/probe-poller";
+import { startCronPoller, stopCronPoller } from "./services/cron-poller";
 
 const app = Fastify({
   logger: { level: env.NODE_ENV === "production" ? "info" : "debug" },
+  bodyLimit: 5 * 1024 * 1024, // 5 MB
 });
 
 let notificationWorker: Awaited<ReturnType<typeof import("./queues/workers/notification-worker").startNotificationWorker>> | null = null;
@@ -37,10 +40,17 @@ async function start() {
   await app.register(authPlugin);
   await app.register(errorHandler);
 
-  // CORS (lazy import to avoid issues in production)
-  if (env.NODE_ENV !== "production") {
+  // Rate limiting — 100 requests per minute per IP per route
+  await app.register(rateLimitPlugin, { max: 100, windowMs: 60_000 });
+
+  // CORS — enabled in all environments, origin configurable via CORS_ORIGIN env
+  {
     const cors = await import("@fastify/cors");
-    await app.register(cors.default, { origin: ["http://localhost:3000"], credentials: true });
+    const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:3000";
+    await app.register(cors.default, {
+      origin: corsOrigin.split(",").map(s => s.trim()),
+      credentials: true,
+    });
   }
 
   // Multipart for file uploads
@@ -60,6 +70,8 @@ async function start() {
   await app.register(apiKeyRoutes, { prefix: "/api/v1" });
   await app.register(membershipRoutes, { prefix: "/api/v1" });
   await app.register(toolsRoutes, { prefix: "/api/v1" });
+// App store routes
+  await app.register(appStoreRoutes, { prefix: "/api/v1" });
 
   // WebSocket
   await app.register(wsPlugin, { prefix: "/ws" });
@@ -94,6 +106,14 @@ async function start() {
     notificationWorker = await startNotificationWorker(app.db);
     cronWorker = await startCronWorker(app.db);
     app.log.info("BullMQ workers started (notification + cron)");
+
+  // Graceful shutdown — stop pollers
+  app.addHook("onClose", async () => {
+    stopMetricsPoller();
+    stopProbePoller();
+    stopCronPoller();
+    app.log.info("Pollers stopped");
+  });
 
     app.addHook("onClose", async () => {
       await notificationWorker?.close();

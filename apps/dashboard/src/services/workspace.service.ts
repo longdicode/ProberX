@@ -4,6 +4,8 @@ import { memberships } from "../db/schema/memberships";
 import { servers } from "../db/schema/servers";
 import { monitorTasks } from "../db/schema/monitor-tasks";
 import { alertRules } from "../db/schema/alert-rules";
+import { alertEvents } from "../db/schema/alert-events";
+import { metricSnapshots } from "../db/schema/metric-snapshots";
 import { AppError } from "../utils/errors";
 import type { DbClient } from "../db/index";
 import type { CreateWorkspaceInput, UpdateWorkspaceInput } from "../validators/workspace";
@@ -101,4 +103,70 @@ export async function getDashboardStats(workspaceId: string, db: DbClient) {
       timestamp: s.lastSeenAt ?? s.createdAt,
     })),
   };
+}
+
+export async function getAlertTrends(workspaceId: string, range: string, db: DbClient) {
+  const intervals: Record<string, string> = {
+    "24h": "1 hour",
+    "7d": "1 day",
+    "30d": "1 day",
+  };
+  const bucket = intervals[range] || "1 day";
+  const since = range === "24h" ? "INTERVAL '24 hours'" : range === "7d" ? "INTERVAL '7 days'" : "INTERVAL '30 days'";
+
+  const result = await db.execute(sql`
+    SELECT
+      date_trunc(${sql.raw(`'${bucket}'`)}, ae.created_at) AS period,
+      COUNT(*)::int AS count,
+      COUNT(CASE WHEN ae.severity IN ('critical','emergency') THEN 1 END)::int AS critical,
+      COUNT(CASE WHEN ae.severity = 'warning' THEN 1 END)::int AS warning,
+      COUNT(CASE WHEN ae.is_resolved = true THEN 1 END)::int AS resolved
+    FROM alert_events ae
+    INNER JOIN servers s ON s.id = ae.server_id
+    WHERE s.workspace_id = ${workspaceId}
+      AND ae.created_at > NOW() - ${sql.raw(since)}
+    GROUP BY period
+    ORDER BY period
+  `);
+
+  return (result.rows as { period: string; count: number; critical: number; warning: number; resolved: number }[]).map((r) => ({
+    period: r.period,
+    count: r.count,
+    critical: r.critical,
+    warning: r.warning,
+    resolved: r.resolved,
+  }));
+}
+
+export async function getServerComparison(workspaceId: string, db: DbClient) {
+  const result = await db.execute(sql`
+    SELECT DISTINCT ON (s.id)
+      s.name,
+      ms.cpu_percent,
+      ms.mem_used,
+      ms.mem_total,
+      ms.disk_used,
+      ms.disk_total
+    FROM servers s
+    LEFT JOIN LATERAL (
+      SELECT cpu_percent, mem_used, mem_total, disk_used, disk_total
+      FROM metric_snapshots
+      WHERE server_id = s.id
+      ORDER BY time DESC LIMIT 1
+    ) ms ON true
+    WHERE s.workspace_id = ${workspaceId}
+      AND s.is_online = true
+  `);
+
+  return (result.rows as {
+    name: string; cpu_percent: string | null; mem_used: string | null;
+    mem_total: string | null; disk_used: string | null; disk_total: string | null;
+  }[]).map((r) => ({
+    name: r.name,
+    cpu: r.cpu_percent ? Number(r.cpu_percent) : 0,
+    memory: r.mem_used != null && r.mem_total != null && Number(r.mem_total) > 0
+      ? Math.round((Number(r.mem_used) / Number(r.mem_total)) * 100) : 0,
+    disk: r.disk_used != null && r.disk_total != null && Number(r.disk_total) > 0
+      ? Math.round((Number(r.disk_used) / Number(r.disk_total)) * 100) : 0,
+  }));
 }

@@ -5,6 +5,13 @@ import { AppError } from "../utils/errors";
 import type { DbClient } from "../db/index";
 import type { LoginInput, RegisterInput, OAuthInput } from "../validators/auth";
 
+export async function getUserById(id: string, db: DbClient) {
+  const [user] = await db.select({
+    id: users.id, email: users.email, name: users.name, avatarUrl: users.avatarUrl, createdAt: users.createdAt,
+  }).from(users).where(eq(users.id, id)).limit(1);
+  return user ?? null;
+}
+
 export async function register(input: RegisterInput, db: DbClient, jwtSign: (payload: object) => string) {
   const existing = await db.select({ id: users.id }).from(users).where(eq(users.email, input.email)).limit(1);
   if (existing.length > 0) throw AppError.conflict("Email already registered");

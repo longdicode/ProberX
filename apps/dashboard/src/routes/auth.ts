@@ -22,6 +22,13 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ token });
   });
 
+  app.get("/me", { preHandler: [app.authenticate] }, async (req, reply) => {
+    const payload = req.user as { sub: string; email: string };
+    const user = await service.getUserById(payload.sub, app.db);
+    if (!user) return reply.code(404).send({ code: "NOT_FOUND", message: "User not found" });
+    return reply.send(user);
+  });
+
   app.post("/oauth", async (req, reply) => {
     if (!env.GITHUB_CLIENT_ID || !env.GITHUB_CLIENT_SECRET) {
       return reply.code(501).send({ code: "NOT_IMPLEMENTED", message: "OAuth is not configured" });

@@ -1,49 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { useLocale } from "@/stores/locale-store";
-import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useWorkspaces, useDashboard, useAlertEvents } from "@/hooks/use-api";
 import { useWebSocket } from "@/hooks/use-websocket";
-import { api } from "@/lib/api-client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useDashboardData } from "@/hooks/use-dashboard-data";
+import { StatsCards } from "@/components/dashboard/stats-cards";
 import { PageSkeleton } from "@/components/shared/loading-skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
-import { Server, Eye, Bell, Cpu, Activity, HardDrive, ArrowUpRight, Plus, Wifi, WifiOff, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Activity, Bell, AlertTriangle, CheckCircle2, Clock, HardDrive, ArrowUpRight, Plus, Wifi, WifiOff, Maximize, Minimize } from "lucide-react";
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+
+const RANGE_OPTIONS = [
+  { value: "24h", label: "24h" },
+  { value: "7d", label: "7d" },
+  { value: "30d", label: "30d" },
+] as const;
 
 export default function OverviewPage() {
   const { t } = useLocale();
-  const queryClient = useQueryClient();
-  const { current, setCurrent } = useWorkspaceStore();
-  const { data: workspaces, isLoading: wsLoading } = useWorkspaces();
-  const { data: dashboard, isLoading, error } = useDashboard(current?.id);
-  const { data: recentAlerts } = useAlertEvents(current?.id);
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
   const { state: wsState } = useWebSocket();
-
-  useEffect(() => {
-    if (!current && workspaces && workspaces.length > 0) {
-      setCurrent(workspaces[0]);
-    }
-  }, [workspaces, current, setCurrent]);
-
-  const handleCreateWorkspace = async () => {
-    setCreating(true);
-    setCreateError(null);
-    try {
-      const ws = await api.post<{ id: string; name: string; plan: string }>("/workspaces", { name: "My Workspace" });
-      await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-      setCurrent({ id: ws.id, name: ws.name, plan: ws.plan, settings: {} });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to create workspace";
-      setCreateError(msg);
-    } finally {
-      setCreating(false);
-    }
-  };
+  const {
+    current,
+    workspaces,
+    wsLoading,
+    dashboard,
+    isLoading,
+    error,
+    recentAlerts,
+    alertTrends,
+    serverComp,
+    creating,
+    createError,
+    trendRange,
+    setTrendRange,
+    isFullscreen,
+    toggleFullscreen,
+    handleCreateWorkspace,
+  } = useDashboardData();
 
   if (wsLoading) return <PageSkeleton />;
 
@@ -97,63 +91,92 @@ export default function OverviewPage() {
     );
   }
 
-  const stats = [
-    { label: t("dashboard.totalServers"), value: String(dashboard.totalServers), icon: Server, change: dashboard.totalServers > 0 ? `${dashboard.totalServers} connected` : t("dashboard.noServersConnected") },
-    { label: t("dashboard.activeMonitors"), value: String(dashboard.activeMonitors), icon: Eye, change: dashboard.activeMonitors > 0 ? `${dashboard.activeMonitors} active` : t("dashboard.noMonitorsConfigured") },
-    { label: t("dashboard.alertsToday"), value: String(dashboard.alertsTotal), icon: Bell, change: dashboard.alertsTotal > 0 ? `${dashboard.alertsTotal} configured` : t("dashboard.noAlerts") },
-    { label: t("dashboard.avgCpu"), value: dashboard.avgCpu > 0 ? `${dashboard.avgCpu.toFixed(1)}%` : "--", icon: Cpu, change: dashboard.avgCpu > 0 ? "Across all servers" : t("dashboard.noData") },
-  ];
+  const trendData = (alertTrends || []).map((p: any) => ({
+    ...p,
+    period: new Date(p.period).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+  }));
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{t("dashboard.overview")}</h1>
           <p className="text-sm text-muted-foreground mt-1">{t("dashboard.overviewDesc")}</p>
         </div>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          {wsState === "connected" ? <Wifi className="w-3.5 h-3.5 text-green-500" /> : <WifiOff className="w-3.5 h-3.5" />}
-          <span>{wsState === "connected" ? "Live" : wsState}</span>
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={toggleFullscreen}>
+            {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+          </Button>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {wsState === "connected" ? <Wifi className="w-3.5 h-3.5 text-green-500" /> : <WifiOff className="w-3.5 h-3.5" />}
+            <span>{wsState === "connected" ? "Live" : wsState}</span>
+          </div>
         </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map(({ label, value, icon: Icon, change }) => (
-          <Card key={label} className="border-border/50 hover:border-border transition-colors">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-              <Icon className="w-4 h-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{value}</div>
-              <p className="text-xs text-muted-foreground mt-1">{change}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+
+      {/* Stat Cards */}
+      <StatsCards dashboard={dashboard} />
+
+      {/* Alert Trends Chart */}
+      <Card className="border-border/50">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-sm font-medium">{t("dashboard.alertTrends")}</CardTitle>
+          <div className="flex gap-1">
+            {RANGE_OPTIONS.map((opt) => (
+              <Button key={opt.value} size="sm" variant={trendRange === opt.value ? "default" : "outline"} className="h-7 text-xs px-2.5" onClick={() => setTrendRange(opt.value)}>
+                {opt.label}
+              </Button>
+            ))}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {!alertTrends || alertTrends.length === 0 ? (
+            <div className="flex items-center justify-center h-[200px] text-muted-foreground text-sm">{t("dashboard.noAlerts")}</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={trendData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="count" name="Total" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="critical" name={t("dashboard.critical")} stroke="hsl(0,84%,60%)" strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="warning" name={t("dashboard.warning")} stroke="hsl(38,92%,50%)" strokeWidth={1.5} dot={false} />
+                <Line type="monotone" dataKey="resolved" name={t("dashboard.resolved")} stroke="hsl(142,71%,45%)" strokeWidth={1.5} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Server Comparison & Alerts */}
       <div className="grid gap-4 md:grid-cols-2">
+        {/* Server Comparison Chart */}
         <Card className="border-border/50">
-          <CardHeader><CardTitle className="text-sm font-medium flex items-center gap-2"><Activity className="w-4 h-4" /> {t("dashboard.recentActivity")}</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-sm font-medium">{t("dashboard.serverComparison")}</CardTitle></CardHeader>
           <CardContent>
-            {dashboard.recentActivity.length === 0 ? (
-              <div className="text-center py-8">
-                <Activity className="w-12 h-12 text-muted-foreground/20 mx-auto mb-3" />
-                <p className="text-muted-foreground text-sm">{t("dashboard.noRecentActivity")}</p>
-              </div>
+            {!serverComp || serverComp.length === 0 ? (
+              <div className="flex items-center justify-center h-[200px] text-muted-foreground text-sm">{t("dashboard.noData")}</div>
             ) : (
-              <div className="space-y-3">
-                {dashboard.recentActivity.map((item, i) => (
-                  <div key={i} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${item.isOnline ? "bg-success" : "bg-muted-foreground"}`} />
-                      <span className="text-sm">{item.serverName}</span>
-                    </div>
-                    <span className="text-xs text-muted-foreground">{item.isOnline ? "Online" : "Offline"}</span>
-                  </div>
-                ))}
-              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={serverComp}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="cpu" name="CPU" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="memory" name={t("servers.memory")} fill="hsl(38,92%,50%)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="disk" name={t("servers.disk")} fill="hsl(262,83%,58%)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             )}
           </CardContent>
         </Card>
+
+        {/* Recent Alerts */}
         <Card className="border-border/50">
           <CardHeader><CardTitle className="text-sm font-medium flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> {t("dashboard.recentAlerts")}</CardTitle></CardHeader>
           <CardContent>
@@ -192,6 +215,8 @@ export default function OverviewPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Quick Actions */}
       <div className="grid gap-4 md:grid-cols-1">
         <Card className="border-border/50">
           <CardHeader><CardTitle className="text-sm font-medium flex items-center gap-2"><HardDrive className="w-4 h-4" /> {t("dashboard.quickActions")}</CardTitle></CardHeader>

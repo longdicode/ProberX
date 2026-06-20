@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api-client";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
@@ -25,6 +25,8 @@ export interface Server {
   isOnline: boolean;
   isHidden: boolean;
   createdAt: string;
+  latestCpuPercent?: string | null;
+  latestMemUsed?: number | null;
 }
 
 export interface DashboardStats {
@@ -63,6 +65,24 @@ export function useDashboard(workspaceId: string | undefined) {
   return useQuery({
     queryKey: ["dashboard", workspaceId],
     queryFn: () => api.get<DashboardStats>(`/workspaces/${workspaceId}/dashboard`),
+    enabled: !!workspaceId,
+    refetchInterval: 15_000,
+  });
+}
+
+export function useAlertTrends(workspaceId: string | undefined, range: string = "7d") {
+  return useQuery({
+    queryKey: ["alert-trends", workspaceId, range],
+    queryFn: () => api.get<{ period: string; count: number; critical: number; warning: number; resolved: number }[]>(`/workspaces/${workspaceId}/alert-trends?range=${range}`),
+    enabled: !!workspaceId,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useServerComparison(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: ["server-comparison", workspaceId],
+    queryFn: () => api.get<{ name: string; cpu: number; memory: number; disk: number }[]>(`/workspaces/${workspaceId}/server-comparison`),
     enabled: !!workspaceId,
     refetchInterval: 15_000,
   });
@@ -177,13 +197,69 @@ export interface MetricSnapshot {
   load1: string | null;
   load5: string | null;
   load15: string | null;
+  gpuName: string | null;
+  gpuUtilPercent: string | null;
+  gpuMemTotal: number | null;
+  gpuMemUsed: number | null;
+  gpuTemp: string | null;
 }
 
-export function useServerMetrics(workspaceId: string | undefined, serverId: string | undefined) {
+export function useServerMetrics(workspaceId: string | undefined, serverId: string | undefined, range?: string) {
+  const params: Record<string, string | number> = { limit: 500 };
+  if (range) {
+    const now = new Date();
+    const from = new Date(now.getTime() - parseRangeMs(range));
+    params.from = from.toISOString();
+    params.to = now.toISOString();
+  }
   return useQuery({
-    queryKey: ["server-metrics", workspaceId, serverId],
-    queryFn: () => api.get<MetricSnapshot[]>(`/workspaces/${workspaceId}/servers/${serverId}/metrics`, { params: { limit: 30 } }),
+    queryKey: ["server-metrics", workspaceId, serverId, range],
+    queryFn: () => api.get<MetricSnapshot[]>(`/workspaces/${workspaceId}/servers/${serverId}/metrics`, { params }),
     enabled: !!workspaceId && !!serverId,
+  });
+}
+
+function parseRangeMs(range: string): number {
+  switch (range) {
+    case "1h": return 3600000;
+    case "6h": return 21600000;
+    case "24h": return 86400000;
+    case "7d": return 604800000;
+    default: return 3600000;
+  }
+}
+
+// --- App Store ---
+
+export interface AppStoreEntry {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  category: string;
+  icon: string;
+  composeYaml: string;
+  defaultEnv: Record<string, string>;
+  memoryLimit: string | null;
+  cpuLimit: string | null;
+  logoUrl: string | null;
+  version: string | null;
+  author: string | null;
+  homepage: string | null;
+  isEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function useAppStore(workspaceId: string | undefined, opts?: { category?: string; search?: string }) {
+  const params: Record<string, string> = {};
+  if (opts?.category && opts.category !== "all") params.category = opts.category;
+  if (opts?.search) params.search = opts.search;
+  return useQuery({
+    queryKey: ["app-store", workspaceId, opts?.category, opts?.search],
+    queryFn: () => api.get<AppStoreEntry[]>(`/workspaces/${workspaceId}/app-store`, { params }),
+    enabled: !!workspaceId,
+    staleTime: 60_000,
   });
 }
 
@@ -205,6 +281,31 @@ export function useCronJobs(workspaceId: string | undefined) {
     queryKey: ["cronjobs", workspaceId],
     queryFn: () => api.get<CronJob[]>(`/workspaces/${workspaceId}/cronjobs`),
     enabled: !!workspaceId,
+  });
+}
+
+export function usePreviewCron(workspaceId: string | undefined, cronExpr: string) {
+  return useQuery({
+    queryKey: ["cron-preview", workspaceId, cronExpr],
+    queryFn: () =>
+      api.post<{ nextRuns: string[]; humanReadable: string }>(
+        `/workspaces/${workspaceId}/cronjobs/preview`,
+        { cronExpr, count: 5 }
+      ),
+    enabled: !!workspaceId && cronExpr.length > 0,
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
+export function useUpdateCronJob(workspaceId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
+      api.patch(`/workspaces/${workspaceId}/cronjobs/${id}`, data, { noToast: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cronjobs", workspaceId] });
+    },
   });
 }
 

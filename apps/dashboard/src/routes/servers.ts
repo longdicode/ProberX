@@ -7,7 +7,7 @@ import * as metricsService from "../services/metrics.service";
 import * as dockerService from "../services/docker.service";
 import * as fileopsService from "../services/fileops.service";
 import * as firewallService from "../services/firewall.service";
-import { fileListQuery, fileReadQuery, fileDeleteBody, fileMkdirBody, fileRenameBody } from "../validators/fileops";
+import { fileListQuery, fileReadQuery, fileDeleteBody, fileMkdirBody, fileRenameBody, fileWriteBody } from "../validators/fileops";
 
 const runProbeBody = z.object({
   type: z.enum(["http", "tcp", "ping", "dns", "ssl"]),
@@ -123,6 +123,12 @@ export const serverRoutes: FastifyPluginAsync = async (app) => {
     const { wid, id } = req.params as { wid: string; id: string };
     const parsed = fileRenameBody.parse(req.body);
     return reply.send(await fileopsService.renameEntry(wid, id, parsed.path, parsed.newName, app.db));
+  });
+
+  app.post("/workspaces/:wid/servers/:id/files/write", { preHandler: [app.authenticate, app.guardWorkspace()] }, async (req, reply) => {
+    const { wid, id } = req.params as { wid: string; id: string };
+    const parsed = fileWriteBody.parse(req.body);
+    return reply.send(await fileopsService.writeFile(wid, id, parsed.path, parsed.content, app.db));
   });
 
   app.delete("/workspaces/:wid/servers/:id/files/delete", { preHandler: [app.authenticate, app.guardWorkspace()] }, async (req, reply) => {

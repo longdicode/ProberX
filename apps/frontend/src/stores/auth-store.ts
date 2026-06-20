@@ -18,7 +18,7 @@ interface AuthState {
   register: (name: string, email: string, password: string) => Promise<void>;
   oauthLogin: (provider: string, code: string, redirectUri: string) => Promise<void>;
   logout: () => void;
-  initialize: () => void;
+  initialize: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -27,14 +27,43 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true,
   isAuthenticated: false,
 
-  initialize: () => {
+  initialize: async () => {
     const token = getToken();
-    const user = getStoredUser();
+    const bypass = process.env.NEXT_PUBLIC_AUTH_BYPASS === "true";
+
+    // Bypass mode: trust localStorage, never clear token on server errors
+    if (bypass) {
+      if (token && token !== "bypass") {
+        // Try /auth/me but don't clear token on failure
+        try {
+          const user = await api.get<User>("/auth/me");
+          set({ token, user, isAuthenticated: true, isLoading: false });
+        } catch {
+          // Keep existing token — server might be starting up
+          const storedUser = getStoredUser();
+          if (storedUser) {
+            set({ token, user: storedUser, isAuthenticated: true, isLoading: false });
+          } else {
+            const demoUser = { id: "dev-001", name: "Dev User", email: "dev@proberx.local" };
+            set({ token, user: demoUser, isAuthenticated: true, isLoading: false });
+          }
+        }
+      } else {
+        const demoUser = { id: "dev-001", name: "Dev User", email: "dev@proberx.local" };
+        set({ token: "bypass", user: demoUser, isAuthenticated: true, isLoading: false });
+      }
+      return;
+    }
+
+    // Normal mode
     if (token) {
-      set({ token, user, isAuthenticated: true, isLoading: false });
-    } else if (process.env.NEXT_PUBLIC_AUTH_BYPASS === "true") {
-      const demoUser = { id: "dev-001", name: "Dev User", email: "dev@proberx.local" };
-      set({ token: "bypass", user: demoUser, isAuthenticated: true, isLoading: false });
+      try {
+        const user = await api.get<User>("/auth/me");
+        set({ token, user, isAuthenticated: true, isLoading: false });
+      } catch {
+        clearTokens();
+        set({ token: null, user: null, isAuthenticated: false, isLoading: false });
+      }
     } else {
       set({ token: null, user: null, isAuthenticated: false, isLoading: false });
     }

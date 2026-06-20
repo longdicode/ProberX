@@ -1,8 +1,8 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -14,21 +14,19 @@ import { ServerStatusBadge } from "@/components/servers/server-status-badge";
 import { LoadingSkeleton } from "@/components/shared/loading-skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { useLocale } from "@/stores/locale-store";
-import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useServers, useServerMetrics, type MetricSnapshot } from "@/hooks/use-api";
-import { api } from "@/lib/api-client";
-import { useWebSocket } from "@/hooks/use-websocket";
-import { formatBytes, formatPercent } from "@/lib/utils";
-import { Cpu, MemoryStick, HardDrive, Network, ArrowLeft, Server, Wifi, WifiOff, Terminal, Pencil, Trash2 } from "lucide-react";
-import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
+import { MetricsCards } from "@/components/servers/metrics-cards";
+import { ProcessList } from "@/components/servers/process-list";
+import { FileManager } from "@/components/servers/file-manager";
+import { ContainerList } from "@/components/servers/container-list";
 import { TerminalComponent } from "@/components/terminal/terminal";
 import { TerminalConnectionBar } from "@/components/terminal/terminal-connection-bar";
 import { terminalWsClient } from "@/lib/terminal-ws";
-import { FileManager } from "@/components/servers/file-manager";
-import { ContainerList } from "@/components/servers/container-list";
 import { getToken } from "@/lib/auth";
+import { useLocale } from "@/stores/locale-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useWebSocket } from "@/hooks/use-websocket";
+import { useServerDetail } from "@/hooks/use-server-detail";
+import { ArrowLeft, Server, Wifi, WifiOff, Terminal, Pencil, Trash2, Play, Pause, Rewind, FastForward } from "lucide-react";
 
 export default function ServerDetailPage() {
   const params = useParams();
@@ -37,80 +35,41 @@ export default function ServerDetailPage() {
   const wid = current?.id;
   const sid = params.id as string;
 
-  const { data: servers, isLoading: serverLoading, error: serverError } = useServers(wid);
-  const server = servers?.find((s) => s.id === sid);
-  const { data: metrics, isLoading: metricsLoading } = useServerMetrics(wid, sid);
-  const { state: wsState, subscribe } = useWebSocket();
-  const [liveMetric, setLiveMetric] = useState<MetricSnapshot | null>(null);
-  const [liveOnline, setLiveOnline] = useState<boolean | null>(null);
-  const [processes, setProcesses] = useState<{ pid: number; name: string; cpu_percent: number; mem_mb: number }[] | null>(null);
-  const [procLoading, setProcLoading] = useState(false);
+  const {
+    server,
+    serverLoading,
+    serverError,
+    isOnline,
+    merged,
+    chartData,
+    playbackIndex,
+    isPlaying,
+    playbackSpeed,
+    playbackSnapshot,
+    metricRange,
+    setMetricRange,
+    startPlayback,
+    stopPlayback,
+    resetPlayback,
+    setPlaybackIndex,
+    setPlaybackSpeed,
+    editOpen,
+    setEditOpen,
+    editForm,
+    setEditForm,
+    submitting,
+    handleEdit,
+    deleteTarget,
+    setDeleteTarget,
+    deleting,
+    handleDelete,
+    openEditDialog,
+  } = useServerDetail(wid, sid);
+
+  const { state: wsState } = useWebSocket();
   const [terminalState, setTerminalState] = useState<string>("disconnected");
-  const queryClient = useQueryClient();
-  const router = useRouter();
 
-  const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ name: "", agentHost: "", agentPort: "9800" });
-  const [submitting, setSubmitting] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  function openEditDialog() {
-    if (!server) return;
-    const hostInfo = server.hostInfo as Record<string, unknown> | null;
-    setEditForm({
-      name: server.name,
-      agentHost: (hostInfo?.agent_host as string) || "",
-      agentPort: String(hostInfo?.agent_port ?? "9800"),
-    });
-    setEditOpen(true);
-  }
-
-  async function handleEdit() {
-    if (!wid || !server) return;
-    setSubmitting(true);
-    try {
-      const body: Record<string, unknown> = { name: editForm.name };
-      if (editForm.agentHost.trim()) body.agentHost = editForm.agentHost.trim();
-      const port = parseInt(editForm.agentPort, 10);
-      if (!isNaN(port)) body.agentPort = port;
-      await api.patch(`/workspaces/${wid}/servers/${sid}`, body);
-      queryClient.invalidateQueries({ queryKey: ["servers", wid] });
-      toast.success(t("servers.serverUpdated"));
-      setEditOpen(false);
-    } catch (err) {
-      console.error("edit server:", err);
-      toast.error(err instanceof Error ? err.message : t("servers.updateFailed"));
-    } finally { setSubmitting(false); }
-  }
-
-  async function handleDelete() {
-    if (!wid || !deleteTarget) return;
-    setDeleting(true);
-    try {
-      await api.delete(`/workspaces/${wid}/servers/${deleteTarget.id}`);
-      queryClient.invalidateQueries({ queryKey: ["servers", wid] });
-      toast.success(t("servers.serverDeleted"));
-      router.push("/servers");
-    } catch (err) {
-      console.error("delete server:", err);
-      toast.error(err instanceof Error ? err.message : t("servers.deleteFailed"));
-    } finally { setDeleting(false); setDeleteTarget(null); }
-  }
-
-  useEffect(() => {
-    const unsubMetrics = subscribe("metrics:update", (payload: unknown) => {
-      const m = payload as { serverId: string } & MetricSnapshot;
-      if (m?.serverId === sid) setLiveMetric(m as MetricSnapshot);
-    });
-    const unsubStatus = subscribe("server:status", (payload: unknown) => {
-      const s = payload as { serverId: string; isOnline: boolean };
-      if (s?.serverId === sid) setLiveOnline(s.isOnline);
-    });
-    return () => { unsubMetrics(); unsubStatus(); };
-  }, [sid, subscribe]);
-
-  if (serverLoading || metricsLoading) return <LoadingSkeleton />;
+  if (serverLoading) return <LoadingSkeleton />;
   if (serverError || !server) {
     return (
       <EmptyState
@@ -122,32 +81,9 @@ export default function ServerDetailPage() {
     );
   }
 
-  const latestMetrics = metrics?.[0];
-  const isOnline = liveOnline ?? server.isOnline;
-  const merged = liveMetric ?? latestMetrics;
-  const chartData = (metrics ?? []).slice().reverse().map((m) => ({
-    time: new Date(m.time).toLocaleTimeString(),
-    cpu: m.cpuPercent ? Number(m.cpuPercent) : 0,
-    mem: m.memUsed && m.memTotal ? ((m.memUsed / m.memTotal) * 100).toFixed(1) : 0,
-    net_in: m.netInBytes ? m.netInBytes / 1024 / 1024 : 0,
-    net_out: m.netOutBytes ? m.netOutBytes / 1024 / 1024 : 0,
-    gpu: m.gpuUtilPercent ? Number(m.gpuUtilPercent) : 0,
-    gpu_temp: m.gpuTemp ? Number(m.gpuTemp) : 0,
-  }));
-
-  const cur = merged;
-  const memUsage = cur?.memUsed && cur?.memTotal
-    ? `${formatBytes(cur.memUsed)} / ${formatBytes(cur.memTotal)}`
-    : "--";
-  const diskUsage = cur?.diskUsed && cur?.diskTotal
-    ? `${formatBytes(cur.diskUsed)} / ${formatBytes(cur.diskTotal)}`
-    : "--";
-  const netTraffic = cur
-    ? `${formatBytes(cur.netInBytes ?? 0)} ↓ / ${formatBytes(cur.netOutBytes ?? 0)} ↑`
-    : "--";
-
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/servers"><Button variant="ghost" size="icon"><ArrowLeft className="w-5 h-5" /></Button></Link>
         <div className="flex-1">
@@ -173,27 +109,50 @@ export default function ServerDetailPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-5">
-        {[
-          { label: t("servers.cpu"), value: cur?.cpuPercent ? `${cur.cpuPercent}%` : "--", icon: Cpu, sub: cur ? `${cur.cpuPercent ?? 0}%` : "--" },
-          { label: t("servers.memory"), value: cur?.memUsed ? formatBytes(cur.memUsed) : "--", icon: MemoryStick, sub: memUsage },
-          { label: t("servers.disk"), value: cur?.diskUsed ? formatBytes(cur.diskUsed) : "--", icon: HardDrive, sub: diskUsage },
-          { label: t("servers.network"), value: cur?.netInBytes ? formatBytes(cur.netInBytes) : "--", icon: Network, sub: netTraffic },
-          { label: t("servers.gpu"), value: cur?.gpuUtilPercent ? `${cur.gpuUtilPercent}%` : "--", icon: Cpu, sub: cur?.gpuTemp ? `${cur.gpuTemp}°C` : "--" },
-        ].map(({ label, value, icon: Icon, sub }) => (
-          <Card key={label} className="border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm text-muted-foreground">{label}</CardTitle>
-              <Icon className="w-4 h-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{value}</div>
-              <p className="text-xs text-muted-foreground mt-1">{sub}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* Metrics Cards */}
+      <MetricsCards merged={merged} />
 
+      {/* Time range & playback controls */}
+      <Card className="border-border/50">
+        <CardContent className="flex items-center gap-4 py-3 flex-wrap">
+          <div className="flex gap-1">
+            {["1h", "6h", "24h", "7d"].map((r) => (
+              <Button key={r} size="sm" variant={metricRange === r ? "default" : "outline"} className="h-7 text-xs px-2.5" onClick={() => { setMetricRange(r); resetPlayback(); }}>
+                {r}
+              </Button>
+            ))}
+          </div>
+          <div className="w-px h-6 bg-border" />
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setPlaybackIndex(Math.max(0, playbackIndex - 1)); }} disabled={playbackIndex <= 0}>
+            <Rewind className="w-3.5 h-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => isPlaying ? stopPlayback() : startPlayback()} disabled={chartData.length === 0}>
+            {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setPlaybackIndex(Math.min(chartData.length - 1, playbackIndex + 1)); }} disabled={playbackIndex >= chartData.length - 1}>
+            <FastForward className="w-3.5 h-3.5" />
+          </Button>
+          <select className="h-7 text-xs rounded border bg-transparent px-1.5" value={playbackSpeed} onChange={(e) => setPlaybackSpeed(Number(e.target.value))}>
+            <option value={1}>1x</option>
+            <option value={2}>2x</option>
+            <option value={4}>4x</option>
+            <option value={10}>10x</option>
+          </select>
+          <input
+            type="range"
+            min={0}
+            max={Math.max(0, chartData.length - 1)}
+            value={playbackIndex >= 0 ? playbackIndex : chartData.length - 1}
+            onChange={(e) => { stopPlayback(); setPlaybackIndex(Number(e.target.value)); }}
+            className="flex-1 min-w-[120px] h-1 accent-primary"
+          />
+          <span className="text-xs text-muted-foreground whitespace-nowrap tabular-nums">
+            {playbackSnapshot ? new Date(playbackSnapshot.time!).toLocaleString() : chartData.length > 0 ? `${chartData.length} points` : "--"}
+          </span>
+        </CardContent>
+      </Card>
+
+      {/* Tabs */}
       <Tabs defaultValue="metrics">
         <TabsList>
           <TabsTrigger value="metrics">{t("servers.metrics")}</TabsTrigger>
@@ -231,42 +190,7 @@ export default function ServerDetailPage() {
           </div>
         </TabsContent>
         <TabsContent value="processes" className="mt-4">
-          <Card className="border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm">{t("servers.processes")}</CardTitle>
-              <Button variant="outline" size="sm" disabled={procLoading} onClick={async () => {
-                setProcLoading(true);
-                try {
-                  const res = await api.get<{ pid: number; name: string; cpu_percent: number; mem_mb: number }[]>(`/workspaces/${wid}/servers/${sid}/processes`);
-                  setProcesses(res);
-                } catch { setProcesses([]); }
-                finally { setProcLoading(false); }
-              }}>{procLoading ? "Loading..." : t("servers.refresh")}</Button>
-            </CardHeader>
-            <CardContent>
-              {!processes ? (
-                <div className="py-8 text-center text-muted-foreground text-sm">{t("servers.clickToLoadProcesses")}</div>
-              ) : processes.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground text-sm">{t("servers.noProcesses")}</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead><tr className="border-b border-border/50"><th className="text-left py-2 font-medium text-muted-foreground">PID</th><th className="text-left py-2 font-medium text-muted-foreground">{t("servers.processName")}</th><th className="text-right py-2 font-medium text-muted-foreground">CPU %</th><th className="text-right py-2 font-medium text-muted-foreground">{t("servers.memory")}</th></tr></thead>
-                    <tbody>
-                      {processes.map((p) => (
-                        <tr key={p.pid} className="border-b border-border/30 last:border-0">
-                          <td className="py-2 font-mono text-xs">{p.pid}</td>
-                          <td className="py-2 truncate max-w-[200px]">{p.name}</td>
-                          <td className="py-2 text-right font-mono text-xs">{p.cpu_percent.toFixed(1)}</td>
-                          <td className="py-2 text-right font-mono text-xs">{p.mem_mb.toFixed(1)} MB</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <ProcessList workspaceId={wid!} serverId={sid} />
         </TabsContent>
         <TabsContent value="terminal" className="mt-4">
           <TerminalConnectionBar
@@ -290,6 +214,7 @@ export default function ServerDetailPage() {
         </TabsContent>
       </Tabs>
 
+      {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
           <DialogHeader>
