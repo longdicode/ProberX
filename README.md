@@ -156,7 +156,7 @@ ProberX 是一个面向 SaaS 运营的轻量级服务器管理平台。不止于
 ### 一键部署
 
 ```bash
-git clone https://github.com/your-username/proberx.git
+git clone https://github.com/longdicode/ProberX.git
 cd proberx
 bash setup.sh
 ```
@@ -171,7 +171,7 @@ bash setup.sh
 ### 手动部署
 
 ```bash
-git clone https://github.com/your-username/proberx.git
+git clone https://github.com/longdicode/ProberX.git
 cd proberx
 cp .env.example .env
 # 编辑 .env — 修改 JWT_SECRET 和 POSTGRES_PASSWORD
@@ -188,7 +188,7 @@ curl http://localhost:3001/health
 
 ```bash
 # Linux amd64
-wget https://github.com/your-username/proberx/releases/latest/download/agent-linux-amd64 -O /usr/local/bin/proberx-agent
+wget https://github.com/longdicode/ProberX/releases/latest/download/agent-linux-amd64 -O /usr/local/bin/proberx-agent
 chmod +x /usr/local/bin/proberx-agent
 
 export DASHBOARD_URL=http://your-dashboard:3001

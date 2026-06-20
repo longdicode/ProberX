@@ -35,7 +35,7 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/your-username/proberx.git
+git clone https://github.com/longdicode/ProberX.git
 cd proberx
 
 # 2. 启动基础服务 (PostgreSQL + Redis)
