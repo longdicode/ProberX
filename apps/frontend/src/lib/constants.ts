@@ -58,6 +58,8 @@ export const NOTIFICATION_TYPES = [
   { value: "wecom", label: "WeCom" },
   { value: "telegram", label: "Telegram" },
   { value: "slack", label: "Slack" },
+  { value: "discord", label: "Discord" },
+  { value: "telegram-bot", label: "Telegram Bot" },
 ] as const;
 
 export const POLLING_INTERVALS = {

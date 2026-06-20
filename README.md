@@ -1,6 +1,7 @@
 <p align="center">
   <h1 align="center">ProberX</h1>
   <p align="center">轻量级自托管服务器 & 网站监控平台</p>
+  <p align="center">监控 · 运维 · 管理 — 一站式 ServerOps</p>
 </p>
 
 <p align="center">
@@ -18,90 +19,130 @@
 
 ## 简介
 
-ProberX 是一个面向 SaaS 运营的轻量级服务器 & 网站监控平台。支持实时指标采集、多类型探测、告警引擎、计划任务、公开状态页。采用多租户架构，适合团队协作或对外提供监控服务。
+ProberX 是一个面向 SaaS 运营的轻量级服务器管理平台。不止于监控 — 它集成了服务器运维工具箱、可视化 Cron、DNS 管理、云备份、应用商店等 14 个工具，覆盖日常运维全链路。
 
 **核心亮点**：
 
-- **Agent 推送模式** — 无需公网可达，Agent 主动上报指标和心跳，适用于 NAT/防火墙后的服务器
+- **Agent Push/Pull 双模式** — Agent 主动注册 + 心跳；Dashboard 也可以拉取指标和远程执行
+- **14 个运维工具箱** — 从 systemd 管理到 DNS 解析，从 Docker 镜像到云备份，开箱即用
 - **多租户 + RBAC** — 工作空间隔离，Owner/Admin/Editor/Viewer 四级权限，适合 SaaS 运营
 - **All-in-One 自托管** — Docker Compose 一键部署，PostgreSQL + Redis + Dashboard + Frontend 开箱即用
-- **Go Agent** — 6.6MB 单二进制文件，CPU < 1%，内存 < 30MB，部署零依赖
+- **Go Agent** — 单二进制文件，CPU < 1%，内存 < 30MB，部署零依赖
+- **完整国际化** — 中文 / English，管理后台全覆盖
 
 ## 技术栈
 
 | 层级 | 技术 |
 |------|------|
-| **Agent 探针** | Go 1.22, gopsutil v3 |
+| **Agent 探针** | Go 1.22, gopsutil v3, Docker Engine API, AWS SDK v2 |
 | **后端 API** | Fastify v5, TypeScript 5, Drizzle ORM |
 | **前端** | Next.js 16 (App Router), React 19, Tailwind CSS 4, shadcn/ui |
-| **数据库** | PostgreSQL + TimescaleDB (时序数据) |
+| **数据库** | PostgreSQL 16 + TimescaleDB (时序数据) |
 | **缓存 & 队列** | Redis 7 + BullMQ |
-| **实时通信** | WebSocket (Fastify WebSocket) |
+| **实时通信** | WebSocket (Fastify + React) |
 | **图表** | Recharts |
-| **部署** | Docker Compose, 多阶段构建 |
+| **部署** | Docker Compose, 多阶段构建, systemd |
 
 ## 功能概览
 
 ### 服务器监控
-- CPU / 内存 / 磁盘 / 网络 / 系统负载实时采集
-- Agent 每 60s 推送指标，每 30s 心跳
-- 历史指标图表（TimescaleDB 超表）
-- 进程列表、Shell 命令远程执行
+- CPU / 内存 / 磁盘 / 网络 / 系统负载 实时采集
+- GPU 监控（NVIDIA nvidia-smi 集成）
+- 历史指标图表（TimescaleDB 超表，支持回放）
+- 进程列表、Docker 容器监控（CPU/内存/端口/状态）
 
 ### 网站 & 服务探测
 - HTTP(S) — URL 可达性、响应时间、状态码、Body 匹配
 - TCP — 端口连通性、延迟
-- ICMP Ping — 丢包率、RTT、抖动
+- ICMP Ping — 丢包率、RTT
 - DNS — 解析结果、解析时间
-- SSL 证书 — 过期时间、证书链验证
+- SSL 证书 — 过期时间、链验证
 
 ### 告警引擎
-- CPU / 内存 / 磁盘 / 响应时间 / 探测成功率 多指标触发
-- 三级告警：警告 / 严重 / 紧急
+- 多指标触发：CPU / 内存 / 磁盘 / 响应时间 / 探测成功率
+- 三级严重度：警告 / 严重 / 紧急
 - 持续时长阈值（避免抖动误报）
-- 通知渠道：邮件、Webhook、钉钉、飞书、企业微信、Telegram
+- **9 种通知渠道**：Webhook / Slack / Telegram / Discord / Email / 钉钉 / 飞书 / 企业微信 / Telegram Bot
 
-### 计划任务 (CronJob)
-- 标准 Cron 表达式，批量服务器执行
-- 执行历史记录 & 输出查看
+### 14 个运维工具箱
+
+| 工具 | 功能 |
+|------|------|
+| **Systemd** | 服务列表、启停重启、状态监控 |
+| **SSL** | 证书检查（SAN/过期/指纹）、ACME 自动签发续期 |
+| **Logs** | journalctl 日志查看、文件日志浏览 |
+| **Packages** | apt/yum/dnf 包列表、可升级包检测、批量升级 |
+| **Nginx** | 状态查看、配置浏览、虚拟主机 CRUD |
+| **App Store** | 18 个预置应用（CMS/DevOps/AI）、Docker Compose 一键部署 |
+| **Databases** | MySQL/PostgreSQL/Redis/MongoDB 安装卸载 |
+| **Backups** | 文件/数据库备份、恢复、云存储同步 |
+| **Security** | SSH 安全审计、端口扫描、Fail2ban 管理 |
+| **Shell AI** | 自然语言 → AI → Shell 命令（支持 OpenAI/DeepSeek/Claude） |
+| **DNS** | Cloudflare/DNSPod/GoDaddy/Vercel/DO — 统一 Zone/Record CRUD |
+| **Docker Images** | 镜像列表、拉取、删除、详情检查、一键清理 |
+| **File Manager** | 文件浏览/读写/上传/下载/新建目录/重命名 |
+| **Firewall** | iptables 规则管理（查看/添加/删除） |
+
+### 可视化 Cron 任务管理器
+- 可视化表达式构建器（预设 + 字段编辑器）
+- 人类可读预览（"每天凌晨 2:00"）+ 未来 5 次执行时间
+- Server 多选目标、编辑/删除、启用/禁用切换
+- 执行历史记录 + 输出查看
+
+### 云备份 (S3/OSS/R2/MinIO)
+- 本地备份 → 一键上传云端
+- Auto Upload：备份创建后自动同步
+- Sync All：一键全量同步
+- 保留策略：按天自动清理云端旧备份
+- 连接测试：验证 S3 凭证
 
 ### 公开状态页
 - 自定义 slug，可发布/隐藏
-- 实时服务状态展示
-- 支持自定义域名、Logo、主题色（计划中）
+- 实时服务状态（在线/离线/探测结果）
 
-### 多租户 & 权限
-- 工作空间隔离，一个账号可加入多个团队
+### 多租户 & 安全
+- 工作空间隔离，多团队协作
 - RBAC：Owner → Admin → Editor → Viewer
-- API Key 管理 & 开放 API
+- API Key 管理
+- JWT 认证 + 速率限制
+- CORS 可配置
+
+### 其他
+- **WebSSH 终端**：浏览器内交互式终端（Windows ConPTY + Unix PTY）
+- **Telegram Bot**：`/start` `/status` `/servers` `/alerts` `/ack` `/exec` 6 个命令
+- **PWA**：可安装为桌面应用，离线缓存
+- **Website CMS**：官网内容动态管理（中英文双语）
 
 ## 架构
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                      用户层 (Browser)                         │
-│    管理后台 (Next.js) │ 状态页面 │ API 文档                    │
+│    管理后台 (Next.js) │ 状态页 │ Telegram Bot │ PWA           │
 └───────────────────────────┬──────────────────────────────────┘
                             │ HTTPS / WSS
 ┌───────────────────────────┼──────────────────────────────────┐
 │                         应用层                                │
 │  ┌────────────────────────────────────────────────────┐      │
-│  │              Dashboard (Fastify)                     │      │
-│  │  REST API │ WebSocket │ BullMQ Worker │ Auth (JWT)  │      │
+│  │           Dashboard (Fastify v5)                     │      │
+│  │  REST API (80+ 端点) │ WebSocket │ BullMQ Worker    │      │
+│  │  JWT Auth │ Rate Limit │ CORS │ Multipart           │      │
 │  └──────────────────────┬─────────────────────────────┘      │
 │                         │                                     │
 │  ┌──────────────────────┴─────────────────────────────┐      │
-│  │         PostgreSQL (+TimescaleDB)  │  Redis         │      │
-│  │         业务数据 + 时序指标          │  缓存 / 队列   │      │
+│  │         PostgreSQL 16 (+TimescaleDB)  │  Redis 7    │      │
+│  │         15 张表 + 2 超表               │ 队列/缓存   │      │
 │  └────────────────────────────────────────────────────┘      │
 └──────────────────────────────────────────────────────────────┘
                             │
-                    HTTP (Push Mode)
+              HTTP (Push/Pull 双模式)
                             │
 ┌──────────────────────────────────────────────────────────────┐
 │                      探针层 (Agent)                           │
-│     Linux Agent │ Windows Agent │ macOS Agent │ Docker Agent  │
-│     (Go 单二进制, 6.6MB, CPU<1%, MEM<30MB)                   │
+│  Go 1.22 │ Docker Socket │ AWS SDK v2 │ WebSocket Terminal   │
+│  指标采集 · 探测执行 · 命令执行 · 工具代理                     │
+│  文件管理 · 防火墙 · 备份 · DNS · Docker Images              │
+│  (单二进制, CPU<1%, MEM<30MB)                                │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -120,27 +161,22 @@ cd proberx
 bash setup.sh
 ```
 
-脚本会自动：
+脚本自动：
 1. 检查 Docker 环境
-2. 生成随机 `JWT_SECRET` 和 `POSTGRES_PASSWORD` 写入 `.env`
+2. 生成随机 `JWT_SECRET` 和 `POSTGRES_PASSWORD`
 3. 拉取 PostgreSQL + Redis 基础镜像
 4. 构建 Dashboard + Frontend 应用镜像
-5. 启动所有服务
-6. 验证 Dashboard 健康检查
+5. 启动全部服务并验证健康检查
 
 ### 手动部署
 
 ```bash
-# 1. 克隆并配置环境变量
 git clone https://github.com/your-username/proberx.git
 cd proberx
 cp .env.example .env
-# 编辑 .env，修改 JWT_SECRET 和 POSTGRES_PASSWORD
+# 编辑 .env — 修改 JWT_SECRET 和 POSTGRES_PASSWORD
 
-# 2. 构建并启动
 docker compose -f docker-compose.prod.yml up -d
-
-# 3. 验证
 curl http://localhost:3001/health
 ```
 
@@ -150,41 +186,31 @@ curl http://localhost:3001/health
 
 ### 安装 Agent
 
-在被监控的服务器上下载并运行 Agent：
-
 ```bash
-# 下载对应平台的 Agent 二进制
 # Linux amd64
 wget https://github.com/your-username/proberx/releases/latest/download/agent-linux-amd64 -O /usr/local/bin/proberx-agent
 chmod +x /usr/local/bin/proberx-agent
 
-# 启动 Agent
 export DASHBOARD_URL=http://your-dashboard:3001
 export AGENT_TOKEN=your-agent-token
 proberx-agent
 ```
 
-或者使用 Docker：
+也可以使用一键安装脚本：
 
 ```bash
-docker run -d \
-  -e DASHBOARD_URL=http://your-dashboard:3001 \
-  -e AGENT_TOKEN=your-agent-token \
-  --net=host \
-  proberx-agent:latest
+bash scripts/install-agent.sh http://your-dashboard:3001
 ```
-
-Agent 启动后会自动注册到 Dashboard，无需额外配置。
 
 ### Agent 环境变量
 
-| 变量 | 必填 | 说明 |
-|------|------|------|
-| `DASHBOARD_URL` | 推荐 | Dashboard 地址，如 `http://192.168.1.100:3001` |
-| `AGENT_TOKEN` | 推荐 | Agent 认证 Token（在 Dashboard 服务器管理页面生成） |
-| `AGENT_ID` | 否 | Agent 唯一 ID（默认自动生成：hostname-pid） |
-| `AGENT_HOST` | 否 | Agent 对外可达地址（默认从注册请求 IP 自动推断） |
-| `AGENT_PORT` | 否 | HTTP 服务端口（默认 9800） |
+| 变量 | 必填 | 默认值 | 说明 |
+|------|------|--------|------|
+| `DASHBOARD_URL` | 推荐 | - | Dashboard 地址 |
+| `AGENT_TOKEN` | 推荐 | - | Agent 认证 Token |
+| `AGENT_ID` | 否 | hostname-pid | Agent 唯一 ID |
+| `AGENT_HOST` | 否 | 自动检测 | Agent 对外地址 |
+| `AGENT_PORT` | 否 | 9800 | HTTP 服务端口 |
 
 ## 项目结构
 
@@ -193,124 +219,144 @@ ProberX/
 ├── apps/
 │   ├── dashboard/              # 控制中心后端 (Fastify + TypeScript)
 │   │   ├── src/
-│   │   │   ├── routes/         # API 路由（13 个模块，52+ 端点）
-│   │   │   ├── services/       # 业务逻辑层（23 个服务）
+│   │   │   ├── routes/         # API 路由（13 模块，80+ 端点）
+│   │   │   ├── services/       # 业务逻辑层（23 服务）
 │   │   │   ├── validators/     # Zod 请求校验
-│   │   │   ├── ws/             # WebSocket 管理（连接、广播、认证）
-│   │   │   ├── plugins/        # Fastify 插件（DB, Redis, Auth, JWT）
-│   │   │   ├── db/schema/     # Drizzle ORM Schema（14 张表）
+│   │   │   ├── ws/             # WebSocket（连接管理、广播）
+│   │   │   ├── plugins/        # Fastify 插件（DB/Redis/Auth/限流）
+│   │   │   ├── queues/         # BullMQ 工作队列
+│   │   │   ├── db/schema/     # Drizzle ORM Schema（15 表）
 │   │   │   └── middleware/     # 中间件
-│   │   ├── Dockerfile
-│   │   └── package.json
+│   │   └── Dockerfile
 │   │
 │   ├── frontend/               # Web 前端 (Next.js 16 + React 19)
 │   │   ├── src/
-│   │   │   ├── app/            # App Router 页面（12 个路由）
-│   │   │   ├── components/     # UI 组件 + shadcn/ui
-│   │   │   ├── hooks/          # 自定义 Hooks (use-api, use-websocket)
-│   │   │   ├── stores/         # Zustand 状态管理（4 个 store）
+│   │   │   ├── app/            # App Router（15 页面）
+│   │   │   ├── components/     # 60+ UI 组件
+│   │   │   ├── hooks/          # React Query Hooks
+│   │   │   ├── stores/         # Zustand 状态管理
 │   │   │   └── lib/            # 工具库 + i18n (中/英)
-│   │   ├── Dockerfile
-│   │   ├── next.config.ts
-│   │   └── package.json
+│   │   └── Dockerfile
 │   │
-│   └── agent/                  # 探针客户端 (Go)
-│       ├── internal/
-│       │   ├── metrics/        # 系统指标采集 (gopsutil)
-│       │   ├── probe/          # 探测执行 (HTTP/TCP/Ping/DNS/SSL)
-│       │   ├── exec/           # 命令执行
-│       │   └── process/        # 进程列表
-│       ├── main.go             # 入口，HTTP Server + 后台协程
-│       ├── Dockerfile
-│       └── go.mod
+│   ├── agent/                  # 探针客户端 (Go)
+│   │   ├── internal/
+│   │   │   ├── handlers/       # HTTP 处理器（1000+ 行）
+│   │   │   ├── tools/          # 10 个运维工具模块
+│   │   │   ├── docker/         # Docker Engine API 客户端
+│   │   │   ├── metrics/        # 系统指标采集 (gopsutil)
+│   │   │   ├── probe/          # 探测执行
+│   │   │   ├── exec/           # 命令执行
+│   │   │   ├── fileops/        # 文件操作
+│   │   │   ├── firewall/       # iptables 管理
+│   │   │   ├── terminal/       # WebSSH 终端
+│   │   │   └── loops/          # 后台协程（注册/心跳/推送）
+│   │   └── main.go
+│   │
+│   ├── website/                # 官网 CMS (Fastify + SQLite)
+│   └── telegram-bot/           # Telegram Bot 独立服务 (grammy)
 │
-├── docker-compose.yml          # 开发环境（仅 PG + Redis）
+├── scripts/
+│   ├── tunnel.sh               # SSH 双向隧道持久化
+│   ├── install-agent.sh        # Agent 一键安装
+│   └── seed-app-store.js       # 应用商店数据填充
+│
+├── docker-compose.yml          # 开发环境（PG + Redis）
 ├── docker-compose.prod.yml     # 生产环境（完整服务栈）
 ├── setup.sh                    # 一键部署脚本
 ├── .env.example                # 环境变量模板
-├── DEVELOPMENT.md              # 详细开发文档（架构/数据模型/API/协议）
-├── DEVELOPMENT_PROGRESS.md     # 开发进度跟踪
-└── .github/workflows/ci.yml    # CI/CD (TypeScript 编译 + Go 构建)
+├── CONTRIBUTING.md             # 贡献者指南
+├── DEVELOPMENT.md              # 架构/数据模型/API/协议文档
+└── .github/workflows/          # CI/CD（TS 编译 + Go 构建）
 ```
 
 ## API 概览
 
-所有 API 以 `/api/v1/` 为前缀，JWT Bearer Token 认证。
+所有 API 以 `/api/v1/` 为前缀，JWT Bearer Token 认证。超过 80 个端点。
 
 ```
 # 认证
-POST   /api/v1/auth/register              # 注册
-POST   /api/v1/auth/login                 # 登录
-POST   /api/v1/auth/refresh               # 刷新 Token
-POST   /api/v1/auth/oauth                 # GitHub OAuth
+POST   /auth/register /login /refresh /oauth
 
-# 工作空间
-GET    /api/v1/workspaces                 # 工作空间列表
-POST   /api/v1/workspaces                 # 创建工作空间
-GET    /api/v1/workspaces/:wid            # 工作空间详情
-PATCH  /api/v1/workspaces/:wid            # 更新工作空间
-DELETE /api/v1/workspaces/:wid            # 删除
+# 工作空间 + 成员
+GET|POST   /workspaces
+PATCH|DEL  /workspaces/:wid
+GET|PATCH  /workspaces/:wid/members
+DEL        /workspaces/:wid/members/:uid
 
-# 服务器
-GET    /api/v1/workspaces/:wid/servers              # 服务器列表
-POST   /api/v1/workspaces/:wid/servers              # 添加服务器
-GET    /api/v1/workspaces/:wid/servers/:id          # 服务器详情
-PATCH  /api/v1/workspaces/:wid/servers/:id          # 更新
-DELETE /api/v1/workspaces/:wid/servers/:id          # 删除
-GET    /api/v1/workspaces/:wid/servers/:id/metrics  # 历史指标
+# 服务器管理
+GET|POST   /workspaces/:wid/servers
+PATCH|DEL  /workspaces/:wid/servers/:id
+GET        /workspaces/:wid/servers/:id/metrics
+POST       /workspaces/:wid/servers/:id/regenerate-token
 
-# 监控探测
-GET    /api/v1/workspaces/:wid/monitors             # 监控列表
-POST   /api/v1/workspaces/:wid/monitors             # 创建监控
-PATCH  /api/v1/workspaces/:wid/monitors/:id         # 更新
-DELETE /api/v1/workspaces/:wid/monitors/:id         # 删除
+# 监控 & 探测
+CRUD       /workspaces/:wid/monitors
+GET        /workspaces/:wid/monitors/:id/probe-results
 
-# 告警
-GET    /api/v1/workspaces/:wid/alerts               # 告警规则
-POST   /api/v1/workspaces/:wid/alerts               # 创建告警
-GET    /api/v1/workspaces/:wid/alert-events         # 告警事件
+# 告警 & 通知
+CRUD       /workspaces/:wid/alerts
+GET        /workspaces/:wid/alert-events
+CRUD       /workspaces/:wid/notifications
 
-# 通知
-GET    /api/v1/workspaces/:wid/notifications        # 通知渠道
-POST   /api/v1/workspaces/:wid/notifications        # 添加渠道
+# Cron 任务
+CRUD       /workspaces/:wid/cronjobs
+POST       /workspaces/:wid/cronjobs/preview
+GET        /workspaces/:wid/cronjobs/:id/executions
 
-# 计划任务
-GET    /api/v1/workspaces/:wid/cronjobs             # 任务列表
-POST   /api/v1/workspaces/:wid/cronjobs             # 创建任务
+# API Key
+CRUD       /workspaces/:wid/api-keys
 
-# 状态页
-GET    /api/v1/workspaces/:wid/status-pages         # 状态页列表
-POST   /api/v1/workspaces/:wid/status-pages         # 创建
+# 状态页 & 公开
+CRUD       /workspaces/:wid/status-pages
+GET        /public/status/:slug
 
-# 公开（无需认证）
-GET    /api/v1/public/status/:slug                  # 状态页数据
+# 运维工具 (14 个)
+GET|POST   /workspaces/:wid/servers/:id/tools/services
+GET|POST   /workspaces/:wid/servers/:id/tools/ssl/...
+GET        /workspaces/:wid/servers/:id/tools/logs/...
+GET|POST   /workspaces/:wid/servers/:id/tools/packages/...
+GET|POST   /workspaces/:wid/servers/:id/tools/nginx/...
+CRUD       /workspaces/:wid/servers/:id/tools/deploy/...
+CRUD       /workspaces/:wid/servers/:id/tools/databases/...
+CRUD       /workspaces/:wid/servers/:id/tools/backups/...
+CRUD       /workspaces/:wid/servers/:id/tools/backups/cloud/...
+GET|POST   /workspaces/:wid/servers/:id/tools/security/...
+POST       /workspaces/:wid/servers/:id/tools/shell-ai/...
+CRUD       /workspaces/:wid/servers/:id/tools/dns/...
+GET|POST   /workspaces/:wid/servers/:id/images/...
 
-# Agent 内部
-POST   /api/v1/agent/register                       # Agent 注册
-POST   /api/v1/agent/heartbeat                      # 心跳
-POST   /api/v1/agent/metrics                        # 推送指标
+# 文件管理
+GET        /workspaces/:wid/servers/:id/files/list
+POST       /workspaces/:wid/servers/:id/files/upload
+
+# WebSocket
+WSS        /ws?token=...&workspaceId=...
+
+# 健康检查
+GET        /health
 ```
 
 ## 与同类产品对比
 
-| 特性 | ProberX | Nezha | Uptime Kuma | Grafana + Prometheus |
-|------|---------|-------|-------------|---------------------|
-| 技术栈 | Go + Node.js | Go | Node.js | Go |
+| 特性 | ProberX | Nezha | Uptime Kuma | Grafana |
+|------|---------|-------|-------------|---------|
+| 技术栈 | Go + TS | Go | Node.js | Go |
 | 实时监控 | ✓ | ✓ | ✓ | ✓ |
+| 运维工具箱 | **14 个** | 2 个 | 0 | 0 |
+| 可视化 Cron | ✓ | - | - | - |
+| 云存储备份 | ✓ | - | - | - |
+| DNS 管理 | ✓ | - | - | - |
 | 公开状态页 | ✓ | - | ✓ | - |
-| 多租户 | ✓ (核心能力) | - | - | - |
-| RBAC | 4 级 | 2 级 | - | ✓ (企业版) |
-| 计划任务 | ✓ | - | - | - |
-| Agent 推送模式 | ✓ | ✓ (gRPC) | 无需 Agent | Node Exporter |
-| 时序数据库 | TimescaleDB | SQLite/MySQL | SQLite | Prometheus TSDB |
-| 告警引擎 | ✓ (多级) | ✓ | ✓ | ✓ (Grafana Alerting) |
-| 自托管 | ✓ | ✓ | ✓ | ✓ |
-| Agent 二进制大小 | 6.6MB | ~15MB | N/A | ~20MB |
+| 多租户 | ✓ (4 级) | - | - | ✓ (企业) |
+| PWA | ✓ | - | - | - |
+| WebSSH 终端 | ✓ | ✓ | - | - |
+| 国际化 | 中/英 | - | - | - |
+| 时序数据库 | TimescaleDB | SQLite | SQLite | Prometheus |
+| Agent 大小 | ~10MB | ~15MB | N/A | ~20MB |
 
 ## 开发
 
 ### 环境要求
-
 - Node.js 22+
 - Go 1.22+
 - PostgreSQL 16+ (推荐 TimescaleDB)
@@ -319,58 +365,58 @@ POST   /api/v1/agent/metrics                        # 推送指标
 ### 启动开发环境
 
 ```bash
-# 1. 启动基础服务
+# 1. 基础服务
 docker compose up -d
 
-# 2. 启动 Dashboard (端口 3001)
+# 2. Dashboard (3001)
 cd apps/dashboard
-cp .env.example .env      # 编辑 .env 配置数据库连接
-npm install
-npm run dev
+cp .env.example .env
+npm install && npm run dev
 
-# 3. 启动 Frontend (端口 3000)
+# 3. Frontend (3000)
 cd apps/frontend
-npm install
-npm run dev
+npm install && npm run dev
 
-# 4. 构建并启动 Agent (端口 9800)
+# 4. Agent (9800)
 cd apps/agent
 go build -o agent .
-export DASHBOARD_URL=http://localhost:3001
-export AGENT_PORT=9800
-./agent
+DASHBOARD_URL=http://localhost:3001 go run .
 ```
 
 ### 运行测试
 
 ```bash
-# Dashboard 单元测试
-cd apps/dashboard && npm test
-
-# Agent 单元测试
-cd apps/agent && go test ./...
+cd apps/dashboard && npm test       # vitest
+cd apps/frontend && npm test        # vitest (63 tests)
+cd apps/agent && go test ./...      # Go tests
+cd apps/agent && go vet ./...       # Go lint
 ```
 
 ## 路线图
 
-- [x] Agent 系统指标采集（CPU/内存/磁盘/网络/负载）
-- [x] Agent 注册 + 心跳 + 指标推送
+- [x] Agent 系统指标 + GPU + Docker 容器监控
 - [x] HTTP/TCP/Ping/DNS/SSL 探测
-- [x] 告警引擎 + 多通知渠道
-- [x] 计划任务 (CronJob)
-- [x] 多租户 + RBAC 权限
-- [x] 公开状态页
-- [x] API Key + 开放 API
-- [x] Docker Compose 生产部署
-- [x] WebSocket 实时推送
+- [x] 告警引擎 + 9 种通知渠道
+- [x] 可视化 Cron 任务管理器
+- [x] 14 个运维工具箱
+- [x] 应用商店（18 个一键部署应用）
+- [x] 云存储备份（S3/OSS/R2/MinIO + 自动同步）
+- [x] DNS 管理（5 服务商统一接口）
+- [x] Docker 镜像管理
+- [x] 多租户 + 4 级 RBAC
+- [x] 公开状态页 + PWA
+- [x] WebSSH 终端 (Windows + Unix)
+- [x] Telegram Bot 独立服务
 - [x] 国际化（中文 / English）
-- [ ] GPU 监控
-- [ ] Docker 容器监控
-- [ ] WebSSH 终端
+- [x] Website CMS
+- [ ] 暗色模式 / 主题切换
+- [ ] 文件版本历史 (Git-like)
 - [ ] SSO/SAML 集成
-- [ ] 白标（自定义域名、Logo、主题）
-- [ ] 移动端 PWA
-- [ ] Agent 自更新
+- [ ] 白标（自定义域名/Logo/主题色）
+
+## 贡献
+
+欢迎贡献！详见 [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 ## License
 
@@ -379,5 +425,5 @@ MIT
 ---
 
 <p align="center">
-  <sub>Made with ❤️ by the ProberX Team</sub>
+  <sub>Built with ❤️</sub>
 </p>

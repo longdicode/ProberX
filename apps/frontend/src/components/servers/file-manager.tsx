@@ -66,6 +66,9 @@ export function FileManager({ serverId }: { serverId: string }) {
   const [renameTarget, setRenameTarget] = useState<{ name: string; isDir: boolean } | null>(null);
   const [renameName, setRenameName] = useState("");
   const [renaming, setRenaming] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState("");
+  const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entry: FileEntry } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -176,9 +179,24 @@ export function FileManager({ serverId }: { serverId: string }) {
         { params: { path: fullPath } }
       );
       setPreview({ name: entry.name, content: res.content, isBinary: res.is_binary, size: res.size });
+      setEditing(false);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to read file");
     }
+  }
+
+  async function handleSave() {
+    if (!preview || !wid) return;
+    setSaving(true);
+    const fullPath = currentPath === "/" ? `/${preview.name}` : `${currentPath}/${preview.name}`;
+    try {
+      await api.post(`/workspaces/${wid}/servers/${serverId}/files/write`, { path: fullPath, content: editContent });
+      setPreview({ ...preview, content: editContent, size: new Blob([editContent]).size });
+      setEditing(false);
+      toast.success("File saved");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to save");
+    } finally { setSaving(false); }
   }
 
   async function handleDownload(entry: FileEntry) {
@@ -546,8 +564,8 @@ export function FileManager({ serverId }: { serverId: string }) {
       )}
 
       {/* Preview Dialog */}
-      <Dialog open={!!preview} onOpenChange={() => setPreview(null)}>
-        <DialogContent className="max-w-3xl max-h-[80vh]">
+      <Dialog open={!!preview} onOpenChange={() => { setPreview(null); setEditing(false); }}>
+        <DialogContent className="max-w-3xl max-h-[85vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <FileText className="w-4 h-4" />
@@ -559,14 +577,32 @@ export function FileManager({ serverId }: { serverId: string }) {
           </DialogHeader>
           {preview?.isBinary ? (
             <div className="py-8 text-center text-muted-foreground">{t("servers.filesBinaryFile")}</div>
+          ) : editing ? (
+            <textarea
+              className="flex-1 min-h-[400px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              spellCheck={false}
+            />
           ) : (
             <pre className="overflow-auto text-xs bg-muted p-4 rounded-md max-h-[50vh] whitespace-pre-wrap break-all">
               {preview?.content}
             </pre>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPreview(null)}>{t("common.cancel")}</Button>
-            {preview && (
+            <Button variant="outline" onClick={() => { setPreview(null); setEditing(false); }}>{t("common.cancel")}</Button>
+            {preview && !preview.isBinary && !editing && (
+              <Button variant="outline" onClick={() => { setEditing(true); setEditContent(preview.content); }}>
+                <Pencil className="w-4 h-4 mr-2" />
+                {t("servers.filesEdit")}
+              </Button>
+            )}
+            {editing && (
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : t("common.save")}
+              </Button>
+            )}
+            {preview && !editing && (
               <Button onClick={() => {
                 const e = entries.find(x => x.name === preview!.name);
                 if (e) handleDownload(e);

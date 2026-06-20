@@ -18,3 +18,4 @@ export * as notificationDispatcher from "./notification-dispatcher";
 export * as dockerService from "./docker.service";
 export * as fileopsService from "./fileops.service";
 export * as alertEvaluator from "./alert-evaluator";
+export * as appStoreService from "./app-store.service";

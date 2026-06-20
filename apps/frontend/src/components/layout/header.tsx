@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useUiStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useLocale } from "@/stores/locale-store";
-import { Search, Sun, Moon, LogOut, User, PanelLeftOpen, Command } from "lucide-react";
+import { Search, Sun, Moon, Monitor, LogOut, User, PanelLeftOpen, Command } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -39,8 +39,17 @@ export function Header() {
       <div className="flex items-center gap-2">
         <LocaleSwitcher />
         {mounted && (
-          <Button variant="ghost" size="icon" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-            {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              if (theme === "dark") setTheme("light");
+              else if (theme === "light") setTheme("system");
+              else setTheme("dark");
+            }}
+            title={theme === "dark" ? "Dark" : theme === "light" ? "Light" : "System"}
+          >
+            {theme === "dark" ? <Moon className="w-5 h-5" /> : theme === "light" ? <Sun className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
           </Button>
         )}
 

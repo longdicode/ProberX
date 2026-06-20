@@ -44,6 +44,11 @@ type RenameRequest struct {
 	NewName string `json:"newName"`
 }
 
+type WriteRequest struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
 func validatePath(p string) (string, error) {
 	cleaned := filepath.Clean(p)
 	if strings.Contains(cleaned, "..") {
@@ -190,6 +195,21 @@ func Rename(p, newName string) error {
 		return err
 	}
 	return os.Rename(absPath, destPath)
+}
+
+func Write(p, content string) error {
+	absPath, err := validatePath(p)
+	if err != nil {
+		return err
+	}
+	fi, err := os.Stat(absPath)
+	if err == nil && fi.IsDir() {
+		return errors.New("cannot write to a directory")
+	}
+	if len(content) > MaxUploadSize {
+		return errors.New("content exceeds max size (100MB)")
+	}
+	return os.WriteFile(absPath, []byte(content), 0644)
 }
 
 func ServeDownload(w http.ResponseWriter, r *http.Request) {

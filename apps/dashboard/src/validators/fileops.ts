@@ -20,3 +20,8 @@ export const fileRenameBody = z.object({
   path: z.string().min(1),
   newName: z.string().min(1),
 });
+
+export const fileWriteBody = z.object({
+  path: z.string().min(1),
+  content: z.string(),
+});

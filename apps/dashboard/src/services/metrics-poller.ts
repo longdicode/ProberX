@@ -35,11 +35,18 @@ export function startMetricsPoller(db: DbClient, intervalSec = 60) {
         name: servers.name,
         workspaceId: servers.workspaceId,
         hostInfo: servers.hostInfo,
+        lastSeenAt: servers.lastSeenAt,
+        isOnline: servers.isOnline,
       })
       .from(servers)
       .where(isNotNull(servers.hostInfo));
 
     for (const s of targets) {
+      // Skip servers offline > 5 min to avoid wasted fetch attempts
+      if (!s.isOnline && s.lastSeenAt) {
+        const offlineSince = Date.now() - new Date(s.lastSeenAt).getTime();
+        if (offlineSince > 300_000) continue;
+      }
       const hostInfo = s.hostInfo as Record<string, unknown> | null;
       const host = hostInfo?.agent_host as string | undefined;
       const port = (hostInfo?.agent_port as number) ?? 9800;
@@ -98,16 +105,20 @@ export function startMetricsPoller(db: DbClient, intervalSec = 60) {
 
         evaluateMetrics(db, s.workspaceId, s.id, s.name, snap.cpu_percent, snap.mem_used, snap.disk_used);
       } catch {
-        await db
-          .update(servers)
-          .set({ isOnline: false })
-          .where(eq(servers.id, s.id));
+        // Only mark offline if the agent hasn't pushed recently (push model takes priority over pull)
+        const recentlySeen = s.lastSeenAt && (Date.now() - new Date(s.lastSeenAt).getTime()) < 90_000;
+        if (!recentlySeen) {
+          await db
+            .update(servers)
+            .set({ isOnline: false })
+            .where(eq(servers.id, s.id));
 
-        broadcastServerStatus(s.workspaceId, {
-          serverId: s.id,
-          serverName: s.name,
-          online: false,
-        });
+          broadcastServerStatus(s.workspaceId, {
+            serverId: s.id,
+            serverName: s.name,
+            online: false,
+          });
+        }
       }
     }
   };

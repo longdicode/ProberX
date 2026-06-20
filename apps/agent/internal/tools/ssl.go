@@ -4,8 +4,9 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"os"
+	"os/exec"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -59,5 +60,49 @@ func CheckSSL(domain string) (*SSLCertInfo, error) {
 	}, nil
 }
 
-var _ = strconv.Itoa
-var _ = runtime.GOOS
+// IssueCert uses certbot to obtain a Let's Encrypt certificate.
+func IssueCert(req SSLIssueRequest) (*SSLRenewResult, error) {
+	if runtime.GOOS == "windows" {
+		return nil, fmt.Errorf("SSL issuance is only supported on Linux")
+	}
+
+	webroot := req.Webroot
+	if webroot == "" {
+		webroot = "/var/www/html"
+	}
+
+	os.MkdirAll(webroot, 0755)
+
+	args := []string{"certonly", "--non-interactive", "--agree-tos",
+		"-m", req.Email, "-d", req.Domain,
+		"--webroot", "-w", webroot}
+
+	cmd := exec.Command("certbot", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return &SSLRenewResult{Success: false, Domain: req.Domain, Output: string(output)}, fmt.Errorf("certbot issue failed: %s", string(output))
+	}
+
+	return &SSLRenewResult{Success: true, Domain: req.Domain, Output: string(output)}, nil
+}
+
+// RenewCert runs certbot renew for a specific domain or all domains.
+func RenewCert(domain string) (*SSLRenewResult, error) {
+	if runtime.GOOS == "windows" {
+		return nil, fmt.Errorf("SSL renewal is only supported on Linux")
+	}
+
+	args := []string{"renew", "--non-interactive"}
+	if domain != "" {
+		args = append(args, "--cert-name", domain, "--force-renewal")
+	}
+
+	cmd := exec.Command("certbot", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return &SSLRenewResult{Success: false, Domain: domain, Output: string(output)}, fmt.Errorf("certbot renew failed: %s", string(output))
+	}
+
+	return &SSLRenewResult{Success: true, Domain: domain, Output: string(output)}, nil
+}
+

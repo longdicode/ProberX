@@ -86,6 +86,21 @@ export async function mkdir(wid: string, sid: string, path: string, db: DbClient
   return res.json();
 }
 
+export async function writeFile(wid: string, sid: string, path: string, content: string, db: DbClient) {
+  const { host, port } = await agentUrl(wid, sid, db);
+  const res = await fetch(`http://${host}:${port}/files/write`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, content }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw AppError.badRequest((err as Record<string, unknown>).error as string || `Agent returned status ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function uploadFile(wid: string, sid: string, destPath: string, fileBuffer: Buffer, filename: string, db: DbClient) {
   const { host, port } = await agentUrl(wid, sid, db);
   const formData = new FormData();

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Server, Plus, Search, Copy, Pencil, Trash2 } from "lucide-react";
+import { Server, Plus, Search, Copy, Pencil, Trash2, CheckSquare, XSquare, Terminal, Loader2 } from "lucide-react";
 import { formatBytes } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageSkeleton } from "@/components/shared/loading-skeleton";
@@ -48,6 +48,37 @@ export default function ServersPage() {
   const [editingServer, setEditingServer] = useState<{ id: string; name: string; hostInfo: Record<string, unknown> } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Batch operations
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchCmd, setBatchCmd] = useState("");
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchResults, setBatchResults] = useState<{ serverId: string; serverName: string; output: string; error?: string }[]>([]);
+
+  function toggleSelect(id: string) {
+    setSelected((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  }
+  function selectAll() { setSelected(new Set(filtered.map((s) => s.id))); }
+  function clearSelection() { setSelected(new Set()); }
+
+  async function runBatchCommand() {
+    if (!current?.id || !batchCmd.trim()) return;
+    setBatchRunning(true);
+    setBatchResults([]);
+    const targets = filtered.filter((s) => selected.has(s.id));
+    const results = await Promise.all(targets.map(async (s) => {
+      try {
+        const res = await api.post<{ output: string }>(`/workspaces/${current.id}/servers/${s.id}/exec`, { command: batchCmd.trim(), timeout: 30 });
+        return { serverId: s.id, serverName: s.name, output: res.output };
+      } catch (err) {
+        return { serverId: s.id, serverName: s.name, output: "", error: err instanceof Error ? err.message : "Failed" };
+      }
+    }));
+    setBatchResults(results);
+    toast.success(`Executed on ${results.length} server(s)`);
+    setBatchRunning(false);
+  }
 
   useEffect(() => {
     if (!current && workspaces && workspaces.length > 0) setCurrent(workspaces[0]);
@@ -161,6 +192,18 @@ export default function ServersPage() {
         <Button onClick={() => setOpen(true)}><Plus className="w-4 h-4 mr-2" /> {t("servers.addServer")}</Button>
       </div>
 
+      {/* Batch action bar */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-primary/10 border border-primary/30">
+          <CheckSquare className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium">{selected.size} server(s) selected</span>
+          <div className="flex-1" />
+          <Button variant="ghost" size="sm" onClick={clearSelection}><XSquare className="w-4 h-4 mr-1" />Deselect</Button>
+          <Button variant="ghost" size="sm" onClick={selectAll}>Select all</Button>
+          <Button size="sm" onClick={() => setBatchOpen(true)}><Terminal className="w-4 h-4 mr-1.5" />Run Command</Button>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <EmptyState icon={Server} title={t("servers.noServers")}
           description={t("servers.noServersDesc")}
@@ -173,12 +216,15 @@ export default function ServersPage() {
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {filtered.map((s) => (
-              <Card key={s.id} className="border-border/50 hover:border-primary/50 transition-colors group">
+              <Card key={s.id} className={`border-border/50 hover:border-primary/50 transition-colors group ${selected.has(s.id) ? "ring-2 ring-primary/50 border-primary" : ""}`}>
                 <CardHeader className="flex flex-row items-start justify-between">
-                  <Link href={`/servers/${s.id}`} className="flex-1 min-w-0">
-                    <CardTitle className="text-base">{s.name}</CardTitle>
-                    <div className="flex gap-1 mt-1">{s.tags?.map((tag) => <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>)}</div>
-                  </Link>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSelect(s.id)} className="rounded accent-primary shrink-0 mt-0.5" />
+                    <Link href={`/servers/${s.id}`} className="flex-1 min-w-0">
+                      <CardTitle className="text-base">{s.name}</CardTitle>
+                      <div className="flex gap-1 mt-1">{s.tags?.map((tag) => <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>)}</div>
+                    </Link>
+                  </div>
                   <div className="flex items-center gap-1.5 shrink-0 ml-2">
                     <ServerStatusBadge status={s.isOnline ? "online" : "offline"} />
                     <button
@@ -211,6 +257,42 @@ export default function ServersPage() {
           </div>
         </div>
       )}
+
+      {/* Batch command dialog */}
+      <Dialog open={batchOpen} onOpenChange={setBatchOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Run Batch Command</DialogTitle>
+            <DialogDescription>Execute a command on {selected.size} selected server(s).</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="batch-cmd">Command</Label>
+              <Input id="batch-cmd" value={batchCmd} onChange={(e) => setBatchCmd(e.target.value)} placeholder="uptime" disabled={batchRunning} />
+            </div>
+            {batchResults.length > 0 && (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {batchResults.map((r) => (
+                  <div key={r.serverId} className={`rounded-lg border p-3 text-xs ${r.error ? "border-red-500/30 bg-red-500/5" : "border-border/50 bg-muted/30"}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium">{r.serverName}</span>
+                      {r.error ? <span className="text-red-400">{r.error}</span> : <span className="text-green-400">OK</span>}
+                    </div>
+                    {r.output && <pre className="whitespace-pre-wrap text-muted-foreground">{r.output}</pre>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setBatchOpen(false); setBatchResults([]); }} disabled={batchRunning}>Close</Button>
+            <Button onClick={runBatchCommand} disabled={batchRunning || !batchCmd.trim()}>
+              {batchRunning ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Terminal className="w-4 h-4 mr-1" />}
+              {batchRunning ? "Running..." : "Run"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={(v) => { if (!v) resetDialog(); }}>
         <DialogContent>

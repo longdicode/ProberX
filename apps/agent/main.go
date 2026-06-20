@@ -1,49 +1,29 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 	"time"
 
-	"github.com/gorilla/websocket"
-	"github.com/proberx/agent/internal/exec"
-	"github.com/proberx/agent/internal/metrics"
-	"github.com/proberx/agent/internal/probe"
-	"github.com/proberx/agent/internal/docker"
-	"github.com/proberx/agent/internal/fileops"
-	"github.com/proberx/agent/internal/firewall"
-	"github.com/proberx/agent/internal/process"
-	"github.com/proberx/agent/internal/tools"
-	"github.com/proberx/agent/internal/terminal"
+	"github.com/proberx/agent/internal/handlers"
+	"github.com/proberx/agent/internal/loops"
 	"github.com/proberx/agent/internal/upgrade"
 )
-
-var agentToken string
-var agentId string
-var agentHost string
-var dashboardUrl string
-
-var wsUpgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
 
 func main() {
 	port := os.Getenv("AGENT_PORT")
 	if port == "" {
 		port = "9800"
 	}
-	agentToken = os.Getenv("AGENT_TOKEN")
-	agentId = os.Getenv("AGENT_ID")
-	agentHost = os.Getenv("AGENT_HOST")
-	dashboardUrl = os.Getenv("DASHBOARD_URL")
+	agentToken := os.Getenv("AGENT_TOKEN")
+	agentId := os.Getenv("AGENT_ID")
+	agentHost := os.Getenv("AGENT_HOST")
+	dashboardUrl := os.Getenv("DASHBOARD_URL")
 
 	if agentId == "" {
 		hostname, _ := os.Hostname()
@@ -51,48 +31,98 @@ func main() {
 		log.Printf("AGENT_ID not set, using generated: %s", agentId)
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", handleHealth)
-	mux.HandleFunc("GET /metrics", handleMetrics)
-	mux.HandleFunc("POST /probe", withAuth(handleProbe))
-	mux.HandleFunc("POST /exec", withAuth(handleExec))
-	mux.HandleFunc("GET /processes", withAuth(handleProcesses))
-	mux.HandleFunc("GET /terminal", handleTerminal)
-	mux.HandleFunc("GET /files/list", withAuth(handleFileList))
-	mux.HandleFunc("GET /files/read", withAuth(handleFileRead))
-	mux.HandleFunc("GET /files/download", withAuth(handleFileDownload))
-	mux.HandleFunc("POST /files/upload", withAuth(handleFileUpload))
-	mux.HandleFunc("DELETE /files/delete", withAuth(handleFileDelete))
-	mux.HandleFunc("POST /files/mkdir", withAuth(handleFileMkdir))
-	mux.HandleFunc("POST /files/rename", withAuth(handleFileRename))
-	mux.HandleFunc("GET /containers", withAuth(handleContainers))
-	mux.HandleFunc("GET /firewall/rules", withAuth(handleFirewallList))
-	mux.HandleFunc("POST /firewall/rules", withAuth(handleFirewallAdd))
-	mux.HandleFunc("DELETE /firewall/rules", withAuth(handleFirewallDelete))
-	mux.HandleFunc("GET /tools/services", withAuth(handleToolsServicesList))
-	mux.HandleFunc("POST /tools/services", withAuth(handleToolsServicesControl))
-	mux.HandleFunc("GET /tools/services/{name}", withAuth(handleToolsServicesStatus))
-	mux.HandleFunc("POST /tools/ssl", withAuth(handleToolsSSLCheck))
-	mux.HandleFunc("GET /tools/logs", withAuth(handleToolsLogsFetch))
-	mux.HandleFunc("GET /tools/logs/file", withAuth(handleToolsLogsFile))
-	mux.HandleFunc("GET /tools/packages", withAuth(handleToolsPackagesList))
-	mux.HandleFunc("POST /tools/packages", withAuth(handleToolsPackagesUpgrade))
-	mux.HandleFunc("GET /tools/nginx", withAuth(handleToolsNginxStatus))
-	mux.HandleFunc("POST /tools/nginx/reload", withAuth(handleToolsNginxReload))
-	mux.HandleFunc("GET /tools/nginx/config", withAuth(handleToolsNginxConfig))
-	mux.HandleFunc("GET /tools/deploy/templates", withAuth(handleToolsDeployTemplates))
-	mux.HandleFunc("GET /tools/deploy/list", withAuth(handleToolsDeployList))
-	mux.HandleFunc("POST /tools/deploy/deploy", withAuth(handleToolsDeployDeploy))
-	mux.HandleFunc("POST /tools/deploy/remove", withAuth(handleToolsDeployRemove))
-	mux.HandleFunc("GET /tools/deploy/logs", withAuth(handleToolsDeployLogs))
-	mux.HandleFunc("POST /tools/deploy/start", withAuth(handleToolsDeployStart))
-	mux.HandleFunc("POST /tools/deploy/stop", withAuth(handleToolsDeployStop))
-	mux.HandleFunc("POST /tools/deploy/restart", withAuth(handleToolsDeployRestart))
-	mux.HandleFunc("POST /tools/deploy/update", withAuth(handleToolsDeployUpdate))
-	mux.HandleFunc("GET /tools/deploy/progress", withAuth(handleToolsDeployProgress))
-	mux.HandleFunc("POST /tools/deploy/check-ports", withAuth(handleToolsCheckPorts))
+	// Create handler config
+	h := handlers.NewConfig(agentToken, agentId, agentHost)
 
-	srv := &http.Server{Addr: ":" + port, Handler: withLogging(mux)}
+	// Register routes
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", h.HandleHealth)
+	mux.HandleFunc("GET /metrics", h.HandleMetrics)
+	mux.HandleFunc("POST /probe", h.WithAuth(h.HandleProbe))
+	mux.HandleFunc("POST /exec", h.WithAuth(h.HandleExec))
+	mux.HandleFunc("GET /processes", h.WithAuth(h.HandleProcesses))
+	mux.HandleFunc("GET /terminal", h.HandleTerminal)
+	mux.HandleFunc("GET /files/list", h.WithAuth(h.HandleFileList))
+	mux.HandleFunc("GET /files/read", h.WithAuth(h.HandleFileRead))
+	mux.HandleFunc("GET /files/download", h.WithAuth(h.HandleFileDownload))
+	mux.HandleFunc("POST /files/upload", h.WithAuth(h.HandleFileUpload))
+	mux.HandleFunc("DELETE /files/delete", h.WithAuth(h.HandleFileDelete))
+	mux.HandleFunc("POST /files/mkdir", h.WithAuth(h.HandleFileMkdir))
+	mux.HandleFunc("POST /files/rename", h.WithAuth(h.HandleFileRename))
+	mux.HandleFunc("POST /files/write", h.WithAuth(h.HandleFileWrite))
+	mux.HandleFunc("GET /containers", h.WithAuth(h.HandleContainers))
+	mux.HandleFunc("GET /images", h.WithAuth(h.HandleImagesList))
+	mux.HandleFunc("POST /images/pull", h.WithAuth(h.HandleImagesPull))
+	mux.HandleFunc("DELETE /images/{id}", h.WithAuth(h.HandleImagesDelete))
+	mux.HandleFunc("GET /images/{id}/json", h.WithAuth(h.HandleImagesInspect))
+	mux.HandleFunc("POST /images/prune", h.WithAuth(h.HandleImagesPrune))
+	mux.HandleFunc("GET /firewall/rules", h.WithAuth(h.HandleFirewallList))
+	mux.HandleFunc("POST /firewall/rules", h.WithAuth(h.HandleFirewallAdd))
+	mux.HandleFunc("DELETE /firewall/rules", h.WithAuth(h.HandleFirewallDelete))
+	mux.HandleFunc("GET /tools/services", h.WithAuth(h.HandleToolsServicesList))
+	mux.HandleFunc("POST /tools/services", h.WithAuth(h.HandleToolsServicesControl))
+	mux.HandleFunc("GET /tools/services/{name}", h.WithAuth(h.HandleToolsServicesStatus))
+	mux.HandleFunc("POST /tools/ssl", h.WithAuth(h.HandleToolsSSLCheck))
+	mux.HandleFunc("POST /tools/ssl/issue", h.WithAuth(h.HandleToolsSSLIssue))
+	mux.HandleFunc("POST /tools/ssl/renew", h.WithAuth(h.HandleToolsSSLRenew))
+	mux.HandleFunc("GET /tools/logs", h.WithAuth(h.HandleToolsLogsFetch))
+	mux.HandleFunc("GET /tools/logs/file", h.WithAuth(h.HandleToolsLogsFile))
+	mux.HandleFunc("GET /tools/packages", h.WithAuth(h.HandleToolsPackagesList))
+	mux.HandleFunc("POST /tools/packages", h.WithAuth(h.HandleToolsPackagesUpgrade))
+	mux.HandleFunc("GET /tools/nginx", h.WithAuth(h.HandleToolsNginxStatus))
+	mux.HandleFunc("POST /tools/nginx/reload", h.WithAuth(h.HandleToolsNginxReload))
+	mux.HandleFunc("GET /tools/nginx/config", h.WithAuth(h.HandleToolsNginxConfig))
+	mux.HandleFunc("GET /tools/nginx/vhosts", h.WithAuth(h.HandleToolsNginxVHostsList))
+	mux.HandleFunc("POST /tools/nginx/vhosts", h.WithAuth(h.HandleToolsNginxVHostsCreate))
+	mux.HandleFunc("DELETE /tools/nginx/vhosts", h.WithAuth(h.HandleToolsNginxVHostsDelete))
+	mux.HandleFunc("GET /tools/deploy/templates", h.WithAuth(h.HandleToolsDeployTemplates))
+	mux.HandleFunc("GET /tools/deploy/list", h.WithAuth(h.HandleToolsDeployList))
+	mux.HandleFunc("POST /tools/deploy/deploy", h.WithAuth(h.HandleToolsDeployDeploy))
+	mux.HandleFunc("POST /tools/deploy/remove", h.WithAuth(h.HandleToolsDeployRemove))
+	mux.HandleFunc("GET /tools/deploy/logs", h.WithAuth(h.HandleToolsDeployLogs))
+	mux.HandleFunc("POST /tools/deploy/start", h.WithAuth(h.HandleToolsDeployStart))
+	mux.HandleFunc("POST /tools/deploy/stop", h.WithAuth(h.HandleToolsDeployStop))
+	mux.HandleFunc("POST /tools/deploy/restart", h.WithAuth(h.HandleToolsDeployRestart))
+	mux.HandleFunc("POST /tools/deploy/update", h.WithAuth(h.HandleToolsDeployUpdate))
+	mux.HandleFunc("GET /tools/deploy/progress", h.WithAuth(h.HandleToolsDeployProgress))
+	mux.HandleFunc("POST /tools/deploy/check-ports", h.WithAuth(h.HandleToolsCheckPorts))
+	mux.HandleFunc("GET /tools/databases", h.WithAuth(h.HandleToolsDatabasesList))
+	mux.HandleFunc("POST /tools/databases", h.WithAuth(h.HandleToolsDatabasesInstall))
+	mux.HandleFunc("DELETE /tools/databases", h.WithAuth(h.HandleToolsDatabasesRemove))
+	mux.HandleFunc("GET /tools/backups", h.WithAuth(h.HandleToolsBackupsList))
+	mux.HandleFunc("POST /tools/backups/file", h.WithAuth(h.HandleToolsBackupsCreateFile))
+	mux.HandleFunc("POST /tools/backups/db", h.WithAuth(h.HandleToolsBackupsCreateDB))
+	mux.HandleFunc("DELETE /tools/backups", h.WithAuth(h.HandleToolsBackupsDelete))
+	mux.HandleFunc("POST /tools/backups/restore", h.WithAuth(h.HandleToolsBackupsRestore))
+	mux.HandleFunc("GET /tools/backups/cloud-config", h.WithAuth(h.HandleToolsBackupsCloudConfig))
+	mux.HandleFunc("PUT /tools/backups/cloud-config", h.WithAuth(h.HandleToolsBackupsCloudConfigPut))
+	mux.HandleFunc("POST /tools/backups/cloud/upload", h.WithAuth(h.HandleToolsBackupsCloudUpload))
+	mux.HandleFunc("POST /tools/backups/cloud/download", h.WithAuth(h.HandleToolsBackupsCloudDownload))
+	mux.HandleFunc("GET /tools/backups/cloud/list", h.WithAuth(h.HandleToolsBackupsCloudList))
+	mux.HandleFunc("DELETE /tools/backups/cloud", h.WithAuth(h.HandleToolsBackupsCloudDelete))
+	mux.HandleFunc("POST /tools/backups/cloud/sync", h.WithAuth(h.HandleToolsBackupsCloudSync))
+	mux.HandleFunc("POST /tools/backups/cloud/cleanup", h.WithAuth(h.HandleToolsBackupsCloudCleanup))
+	mux.HandleFunc("POST /tools/backups/cloud/test", h.WithAuth(h.HandleToolsBackupsCloudTest))
+	mux.HandleFunc("GET /tools/security/ssh", h.WithAuth(h.HandleToolsSecuritySSH))
+	mux.HandleFunc("POST /tools/security/portscan", h.WithAuth(h.HandleToolsSecurityPortScan))
+	mux.HandleFunc("GET /tools/security/fail2ban", h.WithAuth(h.HandleToolsSecurityFail2ban))
+	mux.HandleFunc("POST /tools/security/fail2ban/unban", h.WithAuth(h.HandleToolsSecurityFail2banUnban))
+	mux.HandleFunc("POST /tools/security/fail2ban/ban", h.WithAuth(h.HandleToolsSecurityFail2banBan))
+	mux.HandleFunc("POST /tools/shell-ai/generate", h.WithAuth(h.HandleToolsShellAIGenerate))
+	mux.HandleFunc("POST /tools/shell-ai/execute", h.WithAuth(h.HandleToolsShellAIExecute))
+
+	// DNS
+	mux.HandleFunc("GET /tools/dns/providers", h.WithAuth(h.HandleToolsDNSProviders))
+	mux.HandleFunc("GET /tools/dns/config", h.WithAuth(h.HandleToolsDNSConfig))
+	mux.HandleFunc("POST /tools/dns/config", h.WithAuth(h.HandleToolsDNSConfigSave))
+	mux.HandleFunc("GET /tools/dns/zones", h.WithAuth(h.HandleToolsDNSZones))
+	mux.HandleFunc("GET /tools/dns/records", h.WithAuth(h.HandleToolsDNSRecords))
+	mux.HandleFunc("POST /tools/dns/records", h.WithAuth(h.HandleToolsDNSRecordCreate))
+	mux.HandleFunc("PUT /tools/dns/records/{id}", h.WithAuth(h.HandleToolsDNSRecordUpdate))
+	mux.HandleFunc("DELETE /tools/dns/records/{id}", h.WithAuth(h.HandleToolsDNSRecordDelete))
+
+	// Start HTTP server
+	srv := &http.Server{Addr: ":" + port, Handler: handlers.WithLogging(mux)}
 
 	go func() {
 		log.Printf("Agent %s listening on :%s", agentId, port)
@@ -101,10 +131,12 @@ func main() {
 		}
 	}()
 
-	go registerWithDashboard()
-	go heartbeatLoop()
-	go metricsPushLoop()
+	// Start background loops
+	go loops.RegisterLoop(dashboardUrl, agentId, agentToken, agentHost)
+	go loops.HeartbeatLoop(dashboardUrl, agentId)
+	go loops.MetricsPushLoop(dashboardUrl, agentId)
 
+	// Start upgrade checker
 	upgradeRepo := os.Getenv("UPGRADE_REPO")
 	upgradeInterval := 0 * time.Second
 	if v := os.Getenv("UPGRADE_CHECK_INTERVAL"); v != "" {
@@ -114,6 +146,7 @@ func main() {
 	}
 	go upgrade.Start(upgradeRepo, upgradeInterval)
 
+	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
@@ -125,651 +158,4 @@ func main() {
 		log.Fatalf("shutdown: %v", err)
 	}
 	log.Println("Agent stopped")
-}
-
-func registerWithDashboard() {
-	if dashboardUrl == "" {
-		log.Println("DASHBOARD_URL not set, skipping registration")
-		return
-	}
-
-	hostname, _ := os.Hostname()
-	info := map[string]any{
-		"hostname":   hostname,
-		"os":         runtime.GOOS,
-		"arch":       runtime.GOARCH,
-		"num_cpu":    runtime.NumCPU(),
-		"go_version": runtime.Version(),
-	}
-	if agentHost != "" {
-		info["agent_host"] = agentHost
-	}
-	body := map[string]any{
-		"agentId":  agentId,
-		"hostInfo": info,
-	}
-
-	url := dashboardUrl + "/api/v1/agent/register"
-	for i := 0; i < 5; i++ {
-		bodyBytes, _ := json.Marshal(body)
-		req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(bodyBytes))
-		if err != nil {
-			log.Printf("register: failed to create request: %v", err)
-			return
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			log.Printf("register attempt %d/5: %v", i+1, err)
-			time.Sleep(time.Duration(i+1) * time.Second)
-			continue
-		}
-		resp.Body.Close()
-
-		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			log.Printf("Registered with dashboard: %s", url)
-			return
-		}
-		if resp.StatusCode == 404 {
-			log.Printf("register: server %s not found in dashboard (status %d), will retry", agentId, resp.StatusCode)
-		} else {
-			log.Printf("register attempt %d/5: unexpected status %d", i+1, resp.StatusCode)
-		}
-		time.Sleep(time.Duration(i+1) * time.Second)
-	}
-	log.Println("register: all attempts failed, giving up")
-}
-
-func heartbeatLoop() {
-	if dashboardUrl == "" {
-		return
-	}
-	url := dashboardUrl + "/api/v1/agent/heartbeat"
-	for {
-		time.Sleep(30 * time.Second)
-		body := map[string]any{
-			"agentId":   agentId,
-			"timestamp": time.Now().UnixMilli(),
-		}
-		bodyBytes, _ := json.Marshal(body)
-		resp, err := http.DefaultClient.Post(url, "application/json", bytes.NewReader(bodyBytes))
-		if err != nil {
-			log.Printf("heartbeat: %v", err)
-			continue
-		}
-		resp.Body.Close()
-	}
-}
-
-func metricsPushLoop() {
-	if dashboardUrl == "" {
-		return
-	}
-	url := dashboardUrl + "/api/v1/agent/metrics"
-	for {
-		time.Sleep(60 * time.Second)
-		snap, err := metrics.Collect()
-		if err != nil {
-			log.Printf("metrics push: collect: %v", err)
-			continue
-		}
-		snapBytes, _ := json.Marshal(snap)
-		var snapMap map[string]any
-		json.Unmarshal(snapBytes, &snapMap)
-		snapMap["agentId"] = agentId
-		bodyBytes, _ := json.Marshal(snapMap)
-		resp, err := http.DefaultClient.Post(url, "application/json", bytes.NewReader(bodyBytes))
-		if err != nil {
-			log.Printf("metrics push: %v", err)
-			continue
-		}
-		resp.Body.Close()
-	}
-}
-
-func handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
-		"status":  "ok",
-		"version": upgrade.Version,
-		"time":    time.Now().UnixMilli(),
-	})
-}
-
-func handleMetrics(w http.ResponseWriter, r *http.Request) {
-	snap, err := metrics.Collect()
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, snap)
-}
-
-func handleProbe(w http.ResponseWriter, r *http.Request) {
-	var req probe.Request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	result := probe.Execute(req)
-	writeJSON(w, http.StatusOK, result)
-}
-
-func handleExec(w http.ResponseWriter, r *http.Request) {
-	var req exec.Request
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	result := exec.Run(req)
-	writeJSON(w, http.StatusOK, result)
-}
-
-func handleProcesses(w http.ResponseWriter, r *http.Request) {
-	procs, err := process.List(20)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, procs)
-}
-
-func handleTerminal(w http.ResponseWriter, r *http.Request) {
-	if agentToken != "" && r.URL.Query().Get("token") != agentToken {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-		return
-	}
-
-	conn, err := wsUpgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Printf("terminal: upgrade error: %v", err)
-		return
-	}
-
-	session, err := terminal.NewSession(conn, 80, 24)
-	if err != nil {
-		conn.WriteMessage(websocket.TextMessage,
-			[]byte(`{"type":"terminal:error","payload":{"message":"`+err.Error()+`"}}`))
-		conn.Close()
-		return
-	}
-	session.Run()
-}
-
-func handleFileList(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Query().Get("path")
-	if path == "" {
-		path = "/"
-	}
-	entries, err := fileops.List(path)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, entries)
-}
-
-func handleFileRead(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Query().Get("path")
-	if path == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "path required"})
-		return
-	}
-	result, err := fileops.Read(path)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-func handleFileDownload(w http.ResponseWriter, r *http.Request) {
-	fileops.ServeDownload(w, r)
-}
-
-func handleFileUpload(w http.ResponseWriter, r *http.Request) {
-	fileops.HandleUpload(w, r)
-}
-
-func handleFileDelete(w http.ResponseWriter, r *http.Request) {
-	var req fileops.DeleteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	if err := fileops.Delete(req.Path); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
-}
-
-func handleFileMkdir(w http.ResponseWriter, r *http.Request) {
-	var req fileops.MkdirRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	if err := fileops.Mkdir(req.Path); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "created"})
-}
-
-func handleFileRename(w http.ResponseWriter, r *http.Request) {
-	var req fileops.RenameRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	if err := fileops.Rename(req.Path, req.NewName); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "renamed"})
-}
-
-func handleContainers(w http.ResponseWriter, r *http.Request) {
-	containers, err := docker.List()
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, containers)
-}
-
-func handleFirewallList(w http.ResponseWriter, r *http.Request) {
-	result, err := firewall.List()
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-func handleFirewallAdd(w http.ResponseWriter, r *http.Request) {
-	var req firewall.AddRuleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	if req.Target == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "target is required"})
-		return
-	}
-	result, err := firewall.AddRule(req)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-func handleFirewallDelete(w http.ResponseWriter, r *http.Request) {
-	var req firewall.DeleteRuleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	result, err := firewall.DeleteRule(req)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-// --- Tools: systemd services ---
-
-func handleToolsServicesList(w http.ResponseWriter, r *http.Request) {
-	units, err := tools.ListServices()
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, units)
-}
-
-func handleToolsServicesControl(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name   string `json:"name"`
-		Action string `json:"action"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	result, err := tools.ControlService(req.Name, req.Action)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-func handleToolsServicesStatus(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	result, err := tools.ServiceStatus(name)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-// --- Tools: SSL ---
-
-func handleToolsSSLCheck(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Domain string `json:"domain"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	if req.Domain == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "domain is required"})
-		return
-	}
-	info, err := tools.CheckSSL(req.Domain)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, info)
-}
-
-// --- Tools: Logs ---
-
-func handleToolsLogsFetch(w http.ResponseWriter, r *http.Request) {
-	unit := r.URL.Query().Get("unit")
-	lines := 100
-	if n, err := fmt.Sscanf(r.URL.Query().Get("lines"), "%d", &lines); n != 1 || err != nil {
-		lines = 100
-	}
-	since := r.URL.Query().Get("since")
-	entries, err := tools.FetchLogs(unit, lines, since)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, entries)
-}
-
-func handleToolsLogsFile(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Query().Get("path")
-	lines := 100
-	if n, err := fmt.Sscanf(r.URL.Query().Get("lines"), "%d", &lines); n != 1 || err != nil {
-		lines = 100
-	}
-	entries, err := tools.FetchLogFile(path, lines)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, entries)
-}
-
-// --- Tools: Packages ---
-
-func handleToolsPackagesList(w http.ResponseWriter, r *http.Request) {
-	upgradableOnly := r.URL.Query().Get("upgradable") == "true"
-	pkgs, err := tools.ListPackages(upgradableOnly)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, pkgs)
-}
-
-func handleToolsPackagesUpgrade(w http.ResponseWriter, r *http.Request) {
-	result, err := tools.UpgradePackages()
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-// --- Tools: Nginx ---
-
-func handleToolsNginxStatus(w http.ResponseWriter, r *http.Request) {
-	status, err := tools.NginxStatusCheck()
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, status)
-}
-
-func handleToolsNginxReload(w http.ResponseWriter, r *http.Request) {
-	result, err := tools.NginxReload()
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-func handleToolsNginxConfig(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Query().Get("path")
-	result, err := tools.NginxConfig(path)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-// --- Tools: Deploy ---
-
-func handleToolsDeployTemplates(w http.ResponseWriter, r *http.Request) {
-	templates := tools.ListTemplates()
-	writeJSON(w, http.StatusOK, templates)
-}
-
-func handleToolsDeployList(w http.ResponseWriter, r *http.Request) {
-	deployments, err := tools.GetDeployments()
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, deployments)
-}
-
-func handleToolsDeployDeploy(w http.ResponseWriter, r *http.Request) {
-	var req tools.DeployRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	if req.TemplateID == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "template_id is required"})
-		return
-	}
-	if req.AppName == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "app_name is required"})
-		return
-	}
-	result, err := tools.DeployApp(req)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-func handleToolsDeployRemove(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		AppName string `json:"appName"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	if req.AppName == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "appName is required"})
-		return
-	}
-	result, err := tools.RemoveDeployment(req.AppName)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-func handleToolsDeployLogs(w http.ResponseWriter, r *http.Request) {
-	appName := r.URL.Query().Get("appName")
-	if appName == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "appName is required"})
-		return
-	}
-	logs, err := tools.GetDeploymentLogs(appName)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, logs)
-}
-
-func withAuth(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if agentToken == "" {
-			next(w, r)
-			return
-		}
-		header := r.Header.Get("Authorization")
-		if header != "Bearer "+agentToken {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-			return
-		}
-		next(w, r)
-	}
-}
-
-func withLogging(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		next.ServeHTTP(w, r)
-		log.Printf("%s %s %v", r.Method, r.URL.Path, time.Since(start))
-	})
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
-}
-
-func handleToolsDeployStart(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		AppName string `json:"appName"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	if req.AppName == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "appName is required"})
-		return
-	}
-	result, err := tools.StartDeployment(req.AppName)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-func handleToolsDeployStop(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		AppName string `json:"appName"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	if req.AppName == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "appName is required"})
-		return
-	}
-	result, err := tools.StopDeployment(req.AppName)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-func handleToolsDeployRestart(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		AppName string `json:"appName"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	if req.AppName == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "appName is required"})
-		return
-	}
-	result, err := tools.RestartDeployment(req.AppName)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-func handleToolsDeployUpdate(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		AppName string `json:"appName"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	if req.AppName == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "appName is required"})
-		return
-	}
-	result, err := tools.UpdateDeployment(req.AppName)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-
-func handleToolsDeployProgress(w http.ResponseWriter, r *http.Request) {
-	appName := r.URL.Query().Get("appName")
-	if appName == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "appName is required"})
-		return
-	}
-	logs, err := tools.ReadDeployLog(appName)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]string{"logs": logs})
-}
-
-func handleToolsCheckPorts(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Ports []string `json:"ports"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	result, err := tools.CheckPorts(req.Ports)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
 }

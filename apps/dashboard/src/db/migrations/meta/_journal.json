@@ -15,6 +15,13 @@
       "when": 1779793473572,
       "tag": "0001_broken_echo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780166014899,
+      "tag": "0002_add_app_store",
+      "breakpoints": true
     }
   ]
 }
