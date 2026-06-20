@@ -43,16 +43,10 @@ async function start() {
   // Rate limiting — 100 requests per minute per IP per route
   await app.register(rateLimitPlugin, { max: 100, windowMs: 60_000 });
 
-  // CORS — enabled in all environments, origin configurable via CORS_ORIGIN env
+  // CORS — allow all origins
   {
     const cors = await import("@fastify/cors");
-    const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:3000";
-    const origins = corsOrigin.split(",").map(s => s.trim());
-    await app.register(cors.default, {
-      origin: origins,
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      credentials: false,
-    });
+    await app.register(cors.default, { origin: true });
   }
 
   // Multipart for file uploads
