@@ -6,7 +6,7 @@ import { monitorTasks } from "./monitor-tasks";
 export const alertEvents = pgTable("alert_events", {
   id: uuid("id").primaryKey().defaultRandom(),
   ruleId: uuid("rule_id").notNull().references(() => alertRules.id, { onDelete: "cascade" }),
-  serverId: uuid("server_id").references(() => servers.id),
+  serverId: uuid("server_id").references(() => servers.id, { onDelete: "cascade" }),
   taskId: uuid("task_id").references(() => monitorTasks.id),
   severity: varchar("severity", { length: 20 }).notNull(),
   message: text("message").notNull(),
