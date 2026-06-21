@@ -102,7 +102,7 @@ install_agent() {
             badge_warn "Dashboard doesn't serve agent binary. Checking GitHub Releases..."
 
             # Fallback: try GitHub Releases
-            RELEASE_URL="https://github.com/proberx/proberx/releases/latest/download/agent_linux_amd64"
+            RELEASE_URL="https://github.com/longdicode/ProberX/releases/download/v1.0/proberx-agent-linux-amd64"
             if ! curl -fsSL --connect-timeout 30 -o /tmp/proberx-agent "$RELEASE_URL"; then
                 badge_err "Cannot download agent binary."
                 echo "  Please download the binary manually to ${INSTALL_DIR}/agent"
