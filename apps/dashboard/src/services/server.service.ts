@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { servers } from "../db/schema/servers";
 import { metricSnapshots } from "../db/schema/metric-snapshots";
-import { generateAgentSecret, hashPassword } from "../utils/crypto";
+import { generateAgentSecret } from "../utils/crypto";
 import { AppError } from "../utils/errors";
 import type { DbClient } from "../db/index";
 import type { CreateServerInput, UpdateServerInput } from "../validators/server";
@@ -55,7 +55,6 @@ export async function list(workspaceId: string, db: DbClient, limit = 50) {
 
 export async function create(workspaceId: string, input: CreateServerInput, db: DbClient) {
   const agentSecret = generateAgentSecret();
-	const hashed = await hashPassword(agentSecret);
 	const agentId = input.agentId || `agent-${crypto.randomUUID().slice(0, 8)}`;
 	const hostInfo: Record<string, unknown> = {};
 	if (input.agentHost) hostInfo.agent_host = input.agentHost;
@@ -66,7 +65,7 @@ export async function create(workspaceId: string, input: CreateServerInput, db: 
 		name: input.name,
 		agentId,
 		tags: input.tags ?? [],
-		agentSecret: hashed,
+		agentSecret,
 		isHidden: input.isHidden ?? false,
 		hostInfo,
 	}).returning();
@@ -105,9 +104,8 @@ export async function remove(workspaceId: string, serverId: string, db: DbClient
 export async function regenerateToken(workspaceId: string, serverId: string, db: DbClient) {
   await getById(workspaceId, serverId, db);
   const agentSecret = generateAgentSecret();
-  const hashed = await hashPassword(agentSecret);
   await db.update(servers)
-    .set({ agentSecret: hashed, agentId: null })
+    .set({ agentSecret, agentId: null })
     .where(and(eq(servers.id, serverId), eq(servers.workspaceId, workspaceId)));
   return { agentToken: agentSecret };
 }

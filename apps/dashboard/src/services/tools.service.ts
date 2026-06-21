@@ -10,7 +10,7 @@ async function resolveAgent(workspaceId: string, serverId: string, db: DbClient)
   const host = hostInfo?.agent_host as string | undefined;
   const port = (hostInfo?.agent_port as number) ?? 9800;
   if (!host) throw AppError.badRequest("Server has no agent host configured");
-  return { host, port };
+  return { host, port, agentSecret: server.agentSecret as string | undefined };
 }
 
 async function throwAgentError(res: Response): Promise<never> {
@@ -35,17 +35,25 @@ async function agentFetch<T = any>(
   workspaceId: string, serverId: string, path: string,
   opts: AgentFetchOpts, db: DbClient
 ): Promise<T> {
-  const { host, port } = await resolveAgent(workspaceId, serverId, db);
+  const { host, port, agentSecret } = await resolveAgent(workspaceId, serverId, db);
   const qs = opts.params && Object.keys(opts.params).length
     ? "?" + new URLSearchParams(opts.params).toString()
     : "";
-  const res = await fetch(`http://${host}:${port}${path}${qs}`, {
+  const headers: Record<string, string> = {};
+  if (opts.body) headers["Content-Type"] = "application/json";
+  if (agentSecret) headers["Authorization"] = `Bearer ${agentSecret}`;
+  const agentUrl = `http://${host}:${port}${path}${qs}`;
+  if (agentSecret) console.log(`[tools] calling ${agentUrl} with token (len=${agentSecret.length})`);
+  const res = await fetch(agentUrl, {
     method: opts.method ?? "GET",
-    headers: opts.body ? { "Content-Type": "application/json" } : undefined,
+    headers: Object.keys(headers).length ? headers : undefined,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
     signal: AbortSignal.timeout(opts.timeout ?? 10_000),
   });
-  if (!res.ok) throw await throwAgentError(res);
+  if (!res.ok) {
+    console.log(`[tools] FAIL: ${agentUrl} status=${res.status} token=${agentSecret ? agentSecret.slice(0,8)+'...' : 'NONE'}`);
+    throw await throwAgentError(res);
+  }
   return res.json() as T;
 }
 
