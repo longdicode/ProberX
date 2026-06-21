@@ -13,7 +13,7 @@ apps/agent/agent_*
 apps/agent/agent-*
 # Private configs
 frp/
-# Duplicate dir
-website/
+# Duplicate dir (root only)
+/website/
 # Claude AI
 .claude/
