@@ -66,7 +66,10 @@ export const api = {
   async get<T>(path: string, options?: RequestOptions): Promise<T> {
     const token = getToken();
     const res = await fetch(buildUrl(path, options?.params), {
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(options?.headers || {}) },
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options?.headers || {})
+      },
     });
     return handleResponse<T>(res, options?.noToast);
   },
@@ -75,7 +78,11 @@ export const api = {
     const token = getToken();
     const res = await fetch(buildUrl(path), {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(options?.headers || {}) },
+      headers: {
+        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options?.headers || {})
+      },
       body: body ? JSON.stringify(body) : undefined,
     });
     return handleResponse<T>(res, options?.noToast);
@@ -85,7 +92,10 @@ export const api = {
     const token = getToken();
     const res = await fetch(buildUrl(path), {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: {
+        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
       body: body ? JSON.stringify(body) : undefined,
     });
     return handleResponse<T>(res, options?.noToast);
@@ -95,7 +105,10 @@ export const api = {
     const token = getToken();
     const res = await fetch(buildUrl(path), {
       method: "PUT",
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: {
+        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
       body: body ? JSON.stringify(body) : undefined,
     });
     return handleResponse<T>(res, options?.noToast);
@@ -105,7 +118,10 @@ export const api = {
     const token = getToken();
     const res = await fetch(buildUrl(path), {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: {
+        ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
       body: body ? JSON.stringify(body) : undefined,
     });
     return handleResponse<T>(res, options?.noToast);

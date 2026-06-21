@@ -17,7 +17,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { document.documentElement.lang = locale === "zh" ? "zh-CN" : "en"; }, [locale]);
   useEffect(() => {
     if (isLoading) return;
-    if (!isAuthenticated && !publicPaths.some((p) => pathname.startsWith(p))) {
+    if (!isAuthenticated && !publicPaths.some((p) => p === "/" ? pathname === "/" : pathname.startsWith(p))) {
       router.push("/login");
     }
   }, [isAuthenticated, isLoading, pathname, router]);
