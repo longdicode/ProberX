@@ -5,7 +5,7 @@ import { servers } from "./servers";
 export const cronExecutions = pgTable("cron_executions", {
   id: uuid("id").primaryKey().defaultRandom(),
   jobId: uuid("job_id").notNull().references(() => cronJobs.id, { onDelete: "cascade" }),
-  serverId: uuid("server_id").notNull().references(() => servers.id),
+  serverId: uuid("server_id").notNull().references(() => servers.id, { onDelete: "cascade" }),
   status: varchar("status", { length: 20 }).notNull(),
   output: text("output"),
   startedAt: timestamp("started_at", { withTimezone: true }),

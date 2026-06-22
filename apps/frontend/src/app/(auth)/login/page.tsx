@@ -23,6 +23,7 @@ export default function LoginPage() {
   const { login, oauthLogin } = useAuthStore();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect") || "/overview";
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
@@ -35,7 +36,7 @@ export default function LoginPage() {
     oauthLogin("github", code, redirectUri)
       .then(() => {
         toast.success(t("auth.welcomeBackToast"));
-        router.push("/overview");
+        router.push(redirectTo);
       })
       .catch((err) => {
         toast.error(err instanceof Error ? err.message : t("auth.loginFailed"));
@@ -46,7 +47,7 @@ export default function LoginPage() {
     try {
       await login(data.email, data.password);
       toast.success(t("auth.welcomeBackToast"));
-      router.push("/overview");
+      router.push(redirectTo);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("auth.loginFailed"));
     }

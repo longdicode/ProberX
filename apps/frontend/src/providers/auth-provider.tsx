@@ -18,7 +18,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
     if (!isAuthenticated && !publicPaths.some((p) => pathname.startsWith(p))) {
-      router.push("/login");
+      const redirect = pathname !== "/" ? `?redirect=${encodeURIComponent(pathname)}` : "";
+	      router.push(`/login${redirect}`);
     }
   }, [isAuthenticated, isLoading, pathname, router]);
 
