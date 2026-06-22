@@ -70,7 +70,8 @@ class WsClient {
 
   send(type: string, payload: unknown) {
     if (this.ws?.readyState !== WebSocket.OPEN) return;
-    this.ws.send(JSON.stringify({ id: crypto.randomUUID(), type, payload, timestamp: Date.now() }));
+    const msgId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36);
+    this.ws.send(JSON.stringify({ id: msgId, type, payload, timestamp: Date.now() }));
   }
 
   on(type: string, handler: MessageHandler) {
