@@ -19,6 +19,7 @@ const zh = {
     tasks: "任务",
     firewall: "防火墙",
     tools: "工具箱",
+    aiTerminal: "AI 终端",
     appStore: "应用商店",
     settings: "设置",
   },
