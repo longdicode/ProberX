@@ -171,6 +171,14 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
     (w, s, b, db) => svc.fail2banBan(w, s, b, db));
 
   // Shell AI
+    // Shell AI config persistence
+  getRoute(app, auth, "/workspaces/:wid/servers/:id/tools/shell-ai/settings",
+    (w, s, _q, db) => svc.getShellAIConfig(w, s, db));
+  app.put("/workspaces/:wid/servers/:id/tools/shell-ai/settings", auth, async (req, reply) => {
+    const { wid, id } = req.params as { wid: string; id: string };
+    return reply.send(await svc.saveShellAIConfig(wid, id, req.body as any, app.db));
+  });
+
   postRoute(app, auth, "/workspaces/:wid/servers/:id/tools/shell-ai/generate",
     (w, s, b, db) => svc.generateShellCommand(w, s, b, db));
   postRoute(app, auth, "/workspaces/:wid/servers/:id/tools/shell-ai/execute",
