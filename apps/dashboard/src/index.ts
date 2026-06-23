@@ -28,6 +28,7 @@ import { startCronPoller, stopCronPoller } from "./services/cron-poller";
 const app = Fastify({
   logger: { level: env.NODE_ENV === "production" ? "info" : "debug" },
   bodyLimit: 5 * 1024 * 1024, // 5 MB
+  trustProxy: true,
 });
 
 let notificationWorker: Awaited<ReturnType<typeof import("./queues/workers/notification-worker").startNotificationWorker>> | null = null;
@@ -43,7 +44,7 @@ async function start() {
   // Rate limiting — 100 requests per minute per IP per route
   await app.register(rateLimitPlugin, { max: 100, windowMs: 60_000 });
 
-  // CORS — allow all origins
+  // CORS - allow all origins
   {
     const cors = await import("@fastify/cors");
     await app.register(cors.default, { origin: true });
