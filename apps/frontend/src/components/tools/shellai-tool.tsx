@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,75 @@ export default function ShellAITool({ t, endpoint, meta, router, serverId, serve
   const [executing, setExecuting] = useState(false);
   const [result, setResult] = useState<{ stdout: string; stderr: string; exit_code: number } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const hasSavedRef = useRef(false);
+  const apiKeyManuallySet = useRef(false);
+
+  // Load saved config on mount
+  useEffect(() => {
+    async function loadConfig() {
+      try {
+        const res = await api.get<{ provider: string; model: string; api_key: string; api_url: string }>(
+          endpoint("/tools/shell-ai/settings")
+        );
+        if (res) {
+          if (res.provider) setProvider(res.provider);
+          if (res.model) setModel(res.model);
+          if (res.api_url) setApiUrl(res.api_url);
+          // api_key is returned masked (e.g. "sk-****"), only set if user hasn''t typed a new one
+          if (!apiKeyManuallySet.current && res.api_key) {
+            setApiKey(res.api_key);
+          }
+        }
+      } catch {
+        // No saved config yet, use defaults
+      } finally {
+        setConfigLoaded(true);
+      }
+    }
+    loadConfig();
+  }, []);
+
+  // Auto-save config when settings change (debounced)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const saveConfig = useCallback(() => {
+    if (!configLoaded) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        await api.put(endpoint("/tools/shell-ai/settings"), {
+          provider,
+          model: model || undefined,
+          api_key: apiKeyManuallySet.current ? apiKey : undefined,
+          api_url: apiUrl || undefined,
+        });
+        hasSavedRef.current = true;
+      } catch {
+        // Silently fail - config save is best-effort
+      }
+    }, 800);
+  }, [provider, model, apiKey, apiUrl, configLoaded]);
+
+  useEffect(() => {
+    if (!configLoaded) return;
+    saveConfig();
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [provider, model, apiKey, apiUrl, configLoaded, saveConfig]);
+
+  const handleProviderChange = (v: string) => {
+    if (!v) return;
+    setProvider(v);
+    setModel(providerDefaults[v]?.model || "");
+    setApiUrl(providerDefaults[v]?.url || "");
+  };
+
+  const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    apiKeyManuallySet.current = true;
+    setApiKey(e.target.value);
+  };
 
   async function handleGenerate() {
     if (!prompt) return;
@@ -109,7 +178,7 @@ export default function ShellAITool({ t, endpoint, meta, router, serverId, serve
             <div className="grid gap-3 md:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">{t("tools.shellaiProvider")}</label>
-                <Select value={provider} onValueChange={(v) => { if (!v) return; setProvider(v); setModel(providerDefaults[v]?.model || ""); setApiUrl(providerDefaults[v]?.url || ""); }}>
+                <Select value={provider} onValueChange={handleProviderChange}>
                   <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="openai">OpenAI</SelectItem>
@@ -126,7 +195,7 @@ export default function ShellAITool({ t, endpoint, meta, router, serverId, serve
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium">{t("tools.shellaiApiKey")}</label>
-              <Input type="password" className="h-8 text-xs" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-..." />
+              <Input type="password" className="h-8 text-xs" value={apiKey} onChange={handleApiKeyChange} placeholder="sk-..." />
             </div>
             {provider === "custom" && (
               <div className="space-y-1.5">

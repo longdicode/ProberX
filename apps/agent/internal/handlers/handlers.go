@@ -40,7 +40,7 @@ func NewConfig(agentToken, agentId, agentHost string) *Config {
 				if agentToken != "" {
 					return r.URL.Query().Get("token") == agentToken
 				}
-				return true // dev mode â€” no token configured
+				return true // dev mode â€?no token configured
 			},
 		},
 	}
@@ -1245,6 +1245,31 @@ func (c *Config) HandleToolsShellAIGenerate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	tools.WriteOK(w, result)
+}
+
+
+// HandleToolsShellAIConfig returns the current Shell AI config with API key masked.
+func (c *Config) HandleToolsShellAIConfig(w http.ResponseWriter, r *http.Request) {
+	cfg, err := tools.LoadShellAIConfigPublic()
+	if err != nil {
+		tools.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	tools.WriteOK(w, cfg)
+}
+
+// HandleToolsShellAIConfigSave saves the Shell AI provider config.
+func (c *Config) HandleToolsShellAIConfigSave(w http.ResponseWriter, r *http.Request) {
+	cfg, err := tools.DecodeBody[tools.ShellAIConfig](r)
+	if err != nil {
+		tools.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := tools.SaveShellAIConfigInternal(cfg); err != nil {
+		tools.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	tools.WriteOK(w, map[string]string{"status": "saved"})
 }
 
 // HandleToolsShellAIExecute executes a shell command.

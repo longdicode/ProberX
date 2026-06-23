@@ -243,7 +243,13 @@ export const fail2banBan = (wid: string, sid: string, body: { jail?: string; ip:
 export const generateShellCommand = (wid: string, sid: string, body: { prompt: string; provider: string; model?: string; api_key?: string; api_url?: string }, db: DbClient) =>
   POST<{ command: string; explanation?: string }>(wid, sid, "/tools/shell-ai/generate", { body, timeout: 45_000 }, db);
 
-export const executeShellCommand = (wid: string, sid: string, body: { command: string; timeout?: number }, db: DbClient) =>
+export const getShellAIConfig = (wid: string, sid: string, db: DbClient) =>
+  GET<{ provider: string; model: string; api_key: string; api_url: string }>(wid, sid, "/tools/shell-ai/config", {}, db);
+
+export const saveShellAIConfig = (wid: string, sid: string, body: { provider: string; model?: string; api_key?: string; api_url?: string }, db: DbClient) =>
+  PUT(wid, sid, "/tools/shell-ai/config", { body }, db);
+
+export const executeShellCommand' = (wid: string, sid: string, body: { command: string; timeout?: number }, db: DbClient) =>
   POST<{ stdout: string; stderr: string; exit_code: number }>(wid, sid, "/tools/shell-ai/execute", { body, timeout: 60_000 }, db);
 
 // ── Docker Images ──────────────────────────────────────────────────

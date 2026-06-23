@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -41,7 +43,7 @@ type ShellAIExecuteResponse struct {
 }
 
 const shellAISystemPrompt = `You are a Linux shell command generator running on the target server.
-Convert the user's natural language request into a safe, correct shell command.
+Convert the user''s natural language request into a safe, correct shell command.
 
 Rules:
 - Return ONLY a JSON object: {"command": "...", "explanation": "..."}
@@ -269,4 +271,59 @@ func stripMarkdownCodeFence(s string) string {
 		s = strings.TrimSpace(s)
 	}
 	return s
+}
+
+// --- Shell AI config persistence ---
+
+const shellAIConfigPath = "/opt/proberx/shellai-config.json"
+
+func loadShellAIConfig() (ShellAIConfig, error) {
+	var cfg ShellAIConfig
+	data, err := os.ReadFile(shellAIConfigPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return cfg, nil
+		}
+		return cfg, fmt.Errorf("failed to read Shell AI config: %w", err)
+	}
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return cfg, fmt.Errorf("failed to parse Shell AI config: %w", err)
+	}
+	return cfg, nil
+}
+
+func saveShellAIConfig(cfg ShellAIConfig) error {
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal Shell AI config: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(shellAIConfigPath), 0755); err != nil {
+		return fmt.Errorf("failed to create config dir: %w", err)
+	}
+	if err := os.WriteFile(shellAIConfigPath, data, 0600); err != nil {
+		return fmt.Errorf("failed to write Shell AI config: %w", err)
+	}
+	return nil
+}
+
+// LoadShellAIConfigPublic returns the Shell AI config with api_key masked.
+func LoadShellAIConfigPublic() (ShellAIConfig, error) {
+	cfg, err := loadShellAIConfig()
+	if err != nil {
+		return cfg, err
+	}
+	if len(cfg.APIKey) > 4 {
+		cfg.APIKey = cfg.APIKey[:4] + strings.Repeat("*", len(cfg.APIKey)-4)
+	} else if cfg.APIKey != "" {
+		cfg.APIKey = strings.Repeat("*", len(cfg.APIKey))
+	}
+	return cfg, nil
+}
+
+// SaveShellAIConfigInternal saves the Shell AI config.
+func SaveShellAIConfigInternal(cfg ShellAIConfig) error {
+	if cfg.Provider == "" {
+		return fmt.Errorf("provider is required")
+	}
+	return saveShellAIConfig(cfg)
 }

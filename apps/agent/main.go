@@ -109,6 +109,8 @@ func main() {
 	mux.HandleFunc("POST /tools/security/fail2ban/unban", h.WithAuth(h.HandleToolsSecurityFail2banUnban))
 	mux.HandleFunc("POST /tools/security/fail2ban/ban", h.WithAuth(h.HandleToolsSecurityFail2banBan))
 	mux.HandleFunc("POST /tools/shell-ai/generate", h.WithAuth(h.HandleToolsShellAIGenerate))
+	mux.HandleFunc("GET /tools/shell-ai/config", h.WithAuth(h.HandleToolsShellAIConfig))
+	mux.HandleFunc("PUT /tools/shell-ai/config", h.WithAuth(h.HandleToolsShellAIConfigSave))
 	mux.HandleFunc("POST /tools/shell-ai/execute", h.WithAuth(h.HandleToolsShellAIExecute))
 
 	// DNS

@@ -226,3 +226,11 @@ type CreateDNSRecordRequest struct {
 	TTL      int    `json:"ttl"`
 	Priority int    `json:"priority,omitempty"`
 }
+
+// ShellAIConfig holds the AI provider settings for Shell AI tool.
+type ShellAIConfig struct {
+	Provider string json:"provider"
+	Model    string json:"model"
+	APIKey   string json:"api_key"
+	APIURL   string json:"api_url"
+}
