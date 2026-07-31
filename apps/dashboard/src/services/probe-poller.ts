@@ -29,6 +29,7 @@ export function startProbePoller(db: DbClient, intervalSec = 60) {
         .select({
           id: servers.id,
           hostInfo: servers.hostInfo,
+          agentSecret: servers.agentSecret,
         })
         .from(servers)
         .where(
@@ -43,12 +44,18 @@ export function startProbePoller(db: DbClient, intervalSec = 60) {
       const hostInfo = agent?.hostInfo as Record<string, unknown> | null;
       const host = hostInfo?.agent_host as string | undefined;
       const port = (hostInfo?.agent_port as number) ?? 9800;
+      const agentSecret = agent?.agentSecret as string | undefined;
       if (!host) continue;
 
       try {
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (agentSecret) {
+          headers["Authorization"] = `Bearer ${agentSecret}`;
+        }
+
         const res = await fetch(`http://${host}:${port}/probe`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({
             type: task.type,
             target: task.target,
@@ -87,8 +94,8 @@ export function startProbePoller(db: DbClient, intervalSec = 60) {
         });
 
         evaluateProbe(db, task.workspaceId, task.id, task.name, result.is_success, result.response_ms, result.status_code ?? null);
-      } catch {
-        // Probe execution failed — retry next cycle
+      } catch (err) {
+        console.error("Probe poller error:", err);
       }
     }
   };

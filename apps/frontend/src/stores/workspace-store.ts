@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 interface Workspace {
   id: string;
@@ -15,10 +16,18 @@ interface WorkspaceState {
   clear: () => void;
 }
 
-export const useWorkspaceStore = create<WorkspaceState>((set) => ({
-  current: null,
-  list: [],
-  setCurrent: (ws) => set({ current: ws }),
-  setList: (list) => set({ list }),
-  clear: () => set({ current: null, list: [] }),
-}));
+export const useWorkspaceStore = create<WorkspaceState>()(
+  persist(
+    (set) => ({
+      current: null,
+      list: [],
+      setCurrent: (ws) => set({ current: ws }),
+      setList: (list) => set({ list }),
+      clear: () => set({ current: null, list: [] }),
+    }),
+    {
+      name: "proberx_workspace_v2",
+      partialize: (state) => ({ current: state.current }),
+    }
+  )
+);

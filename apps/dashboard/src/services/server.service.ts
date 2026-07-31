@@ -118,6 +118,7 @@ export async function pullMetrics(workspaceId: string, serverId: string, db: DbC
   if (!host) throw AppError.badRequest("Server has no agent host configured");
 
   const res = await fetch(`http://${host}:${port}/metrics`, {
+    headers: { Authorization: `Bearer ${server.agentSecret}` },
     signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) throw AppError.badRequest(`Agent returned status ${res.status}`);
@@ -161,7 +162,7 @@ export async function runProbe(
   const timeoutMs = probe.timeoutMs ?? 5000;
   const res = await fetch(`http://${host}:${port}/probe`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${server.agentSecret}` },
     body: JSON.stringify({
       type: probe.type,
       target: probe.target,
@@ -179,12 +180,16 @@ export async function getProcesses(workspaceId: string, serverId: string, db: Db
   const hostInfo = server.hostInfo as Record<string, unknown> | null;
   const host = hostInfo?.agent_host as string | undefined;
   const port = (hostInfo?.agent_port as number) ?? 9800;
-  if (!host) throw AppError.badRequest("Server has no agent host configured");
+  if (!host) return [];
 
-  const res = await fetch(`http://${host}:${port}/processes`, {
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) throw AppError.badRequest(`Agent returned status ${res.status}`);
-
-  return res.json();
+  try {
+    const res = await fetch(`http://${host}:${port}/processes`, {
+      headers: { Authorization: `Bearer ${server.agentSecret}` },
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return [];
+    return res.json();
+  } catch {
+    return [];
+  }
 }

@@ -1,4 +1,5 @@
 "use client";
+import { Radio } from "lucide-react";
 
 import { useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -12,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Radio } from "lucide-react";
 import { toast } from "sonner";
 import { loginSchema, type LoginInput } from "@/lib/validators";
 

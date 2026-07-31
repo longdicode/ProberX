@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useUiStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useLocale } from "@/stores/locale-store";
+import { useRouter } from "next/navigation";
 import { Search, Sun, Moon, Monitor, LogOut, User, PanelLeftOpen, Command } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -12,6 +13,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { LocaleSwitcher } from "./locale-switcher";
 
 export function Header() {
+  const router = useRouter();
   const { theme, setTheme } = useTheme();
   const { toggleSidebar, sidebarOpen, toggleCommandPalette } = useUiStore();
   const { user, logout } = useAuthStore();
@@ -19,7 +21,7 @@ export function Header() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const initials = user?.name?.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) || "U";
+  const initials = user?.name?.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2) || user?.email?.[0]?.toUpperCase() || "?";
 
   return (
     <header className="sticky top-0 z-30 h-14 glass border-b border-border/40 flex items-center justify-between px-4">
@@ -71,7 +73,7 @@ export function Header() {
             <DropdownMenuSeparator />
             <DropdownMenuItem><User className="w-4 h-4 mr-2" /> {t("header.profile")}</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout} className="text-destructive">
+            <DropdownMenuItem onClick={() => { logout(); router.push("/login"); }} className="text-destructive">
               <LogOut className="w-4 h-4 mr-2" /> {t("header.signOut")}
             </DropdownMenuItem>
           </DropdownMenuContent>

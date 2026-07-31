@@ -20,6 +20,7 @@ import { apiKeyRoutes } from "./routes/api-keys";
 import { membershipRoutes } from "./routes/memberships";
 import { toolsRoutes } from "./routes/tools";
 import { appStoreRoutes } from "./routes/app-store";
+import { mcpRoutes } from "./routes/mcp";
 import { wsPlugin } from "./ws/index";
 import { startMetricsPoller, stopMetricsPoller } from "./services/metrics-poller";
 import { startProbePoller, stopProbePoller } from "./services/probe-poller";
@@ -29,6 +30,22 @@ const app = Fastify({
   logger: { level: env.NODE_ENV === "production" ? "info" : "debug" },
   bodyLimit: 5 * 1024 * 1024, // 5 MB
   trustProxy: true,
+<<<<<<< HEAD
+=======
+});
+
+// Handle empty JSON body in DELETE/PUT requests
+app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
+  try {
+    if (!body || body.length === 0) {
+      done(null, undefined);
+    } else {
+      done(null, JSON.parse(body as string));
+    }
+  } catch (err) {
+    done(err as Error);
+  }
+>>>>>>> b833aa1 (fix: agent auth headers, MCP route reply check, process-list auto-load, auth store localStorage fallback, docker.service return fix)
 });
 
 let notificationWorker: Awaited<ReturnType<typeof import("./queues/workers/notification-worker").startNotificationWorker>> | null = null;
@@ -69,6 +86,8 @@ async function start() {
   await app.register(toolsRoutes, { prefix: "/api/v1" });
 // App store routes
   await app.register(appStoreRoutes, { prefix: "/api/v1" });
+  // MCP (Model Context Protocol) for AI agent integration
+  await app.register(mcpRoutes, { prefix: "/api/v1" });
 
   // WebSocket
   await app.register(wsPlugin, { prefix: "/ws" });

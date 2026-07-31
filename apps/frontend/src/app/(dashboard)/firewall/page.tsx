@@ -66,9 +66,6 @@ export default function FirewallPage() {
     src_port: "", dst_port: "", target: "ACCEPT", extra: "",
   });
 
-  useEffect(() => {
-    if (!current && workspaces && workspaces.length > 0) setCurrent(workspaces[0]);
-  }, [workspaces, current, setCurrent]);
 
   const fetchRules = useCallback(async () => {
     if (!current?.id || !serverId) return;

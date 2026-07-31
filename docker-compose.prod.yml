@@ -60,12 +60,12 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api/v1}
-        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:3001/ws}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:3001/ws} (fix: agent auth headers, MCP route reply check, process-list auto-load, auth store localStorage fallback, docker.service return fix)
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api/v1}
-      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:3001/ws}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://agent.yqone.cn/api/v1}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://agent.yqone.cn/ws}
       NEXT_PUBLIC_AUTH_BYPASS: "false"
     depends_on:
       - dashboard

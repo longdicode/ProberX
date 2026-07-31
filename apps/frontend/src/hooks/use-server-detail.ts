@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
-import { useServers, useServerMetrics, type MetricSnapshot } from "@/hooks/use-api";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useServerMetrics, type MetricSnapshot, type Server } from "@/hooks/use-api";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { api } from "@/lib/api-client";
 import { toast } from "sonner";
@@ -21,8 +21,11 @@ export function useServerDetail(wid: string | undefined, sid: string) {
   const queryClient = useQueryClient();
   const { subscribe } = useWebSocket();
 
-  const { data: servers, isLoading: serverLoading, error: serverError } = useServers(wid);
-  const server = servers?.find((s) => s.id === sid);
+  const { data: server, isLoading: serverLoading, error: serverError } = useQuery<Server>({
+    queryKey: ["server", wid, sid],
+    queryFn: () => api.get("/workspaces/" + wid + "/servers/" + sid),
+    enabled: !!wid && !!sid,
+  });
 
   const [metricRange, setMetricRange] = useState("6h");
   const { data: metrics, isLoading: metricsLoading } = useServerMetrics(wid, sid, metricRange);

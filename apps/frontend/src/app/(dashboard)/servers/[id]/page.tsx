@@ -69,7 +69,7 @@ export default function ServerDetailPage() {
   const { state: wsState } = useWebSocket();
   const [terminalState, setTerminalState] = useState<string>("disconnected");
 
-  if (serverLoading) return <LoadingSkeleton />;
+  if (!current || serverLoading) return <LoadingSkeleton />;
   if (serverError || !server) {
     return (
       <EmptyState

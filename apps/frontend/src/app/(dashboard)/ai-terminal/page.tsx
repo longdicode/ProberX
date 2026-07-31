@@ -24,7 +24,7 @@ type Message = {
 };
 
 function genId() { return Math.random().toString(36).slice(2, 10); }
-
+ (fix: agent auth headers, MCP route reply check, process-list auto-load, auth store localStorage fallback, docker.service return fix)
 export default function AiTerminalPage() {
   const { t } = useLocale();
   const { current } = useWorkspaceStore();
@@ -39,7 +39,7 @@ export default function AiTerminalPage() {
   const onlineServers = (servers || []).filter(s => s.isOnline);
   const wid = current?.id || "";
   const sid = selectedServer;
-
+ (fix: agent auth headers, MCP route reply check, process-list auto-load, auth store localStorage fallback, docker.service return fix)
   const endpoint = useCallback((path: string) => {
     if (!wid || !sid) return "";
     return `/workspaces/${wid}/servers/${sid}${path}`;
@@ -49,7 +49,7 @@ export default function AiTerminalPage() {
 
   useEffect(() => {
     if (onlineServers.length > 0 && !sid) setSelectedServer(onlineServers[0].id);
-  }, [onlineServers, sid]);
+  }, [onlineServers, sid]); (fix: agent auth headers, MCP route reply check, process-list auto-load, auth store localStorage fallback, docker.service return fix)
 
   async function handleSend() {
     const text = input.trim();
@@ -91,7 +91,7 @@ export default function AiTerminalPage() {
       setLoading(false);
       setMessages(prev => [...prev, {
         id: genId(), role: "system", content: e instanceof Error ? e.message : "Execution failed", timestamp: Date.now()
-      }]);
+      }]); (fix: agent auth headers, MCP route reply check, process-list auto-load, auth store localStorage fallback, docker.service return fix)
     }
   }
 
@@ -130,7 +130,7 @@ export default function AiTerminalPage() {
         </Button>
       </div>
 
-      {/* Messages */}
+      {/* Messages */} (fix: agent auth headers, MCP route reply check, process-list auto-load, auth store localStorage fallback, docker.service return fix)
       <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 py-2 pr-2">
         {messages.length === 0 && (
           <div className="text-center text-muted-foreground py-20">
@@ -164,7 +164,7 @@ export default function AiTerminalPage() {
           />
           <Button onClick={handleSend} disabled={!sid || !input.trim() || loading}>
             <Send className="w-4 h-4" />
-          </Button>
+          </Button> (fix: agent auth headers, MCP route reply check, process-list auto-load, auth store localStorage fallback, docker.service return fix)
         </div>
       </div>
     </div>
@@ -224,6 +224,6 @@ function MessageBubble({ msg }: { msg: Message }) {
           )}
         </CardContent>
       </Card>
-    </div>
+    </div> (fix: agent auth headers, MCP route reply check, process-list auto-load, auth store localStorage fallback, docker.service return fix)
   );
 }

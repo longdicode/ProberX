@@ -1,0 +1,68 @@
+{
+    "name":  "proberx-desktop",
+    "version":  "1.0.0",
+    "description":  "ProberX 鏈嶅姟鍣ㄧ洃鎺ф闈㈠鎴风",
+    "author":  "ProberX",
+    "main":  "main.js",
+    "scripts":  {
+                    "start":  "electron .",
+                    "build":  "electron-builder --win",
+                    "build:linux":  "electron-builder --linux",
+                    "build:mac":  "electron-builder --mac"
+                },
+    "build":  {
+                  "appId":  "com.proberx.desktop",
+                  "productName":  "ProberX",
+                  "copyright":  "Copyright 漏 2025 ProberX",
+                  "directories":  {
+                                      "output":  "dist"
+                                  },
+                  "win":  {
+                              "target":  [
+                                             {
+                                                 "target":  "nsis",
+                                                 "arch":  [
+                                                              "x64"
+                                                          ]
+                                             }
+                                         ],
+                              "icon":  "assets/icon.ico",
+                              "signAndEditExecutable":  false
+                          },
+                  "nsis":  {
+                               "oneClick":  false,
+                               "perMachine":  true,
+                               "allowToChangeInstallationDirectory":  true,
+                               "createDesktopShortcut":  true,
+                               "createStartMenuShortcut":  true,
+                               "shortcutName":  "ProberX",
+                               "installerIcon":  "assets/icon.ico",
+                               "uninstallerIcon":  "assets/icon.ico",
+                               "installerHeaderIcon":  "assets/icon.ico",
+                               "license":  "LICENSE.txt",
+                               "installerLanguages":  [
+                                                          "zh_CN",
+                                                          "en_US"
+                                                      ],
+                               "displayLanguageSelector":  true,
+                               "multiLanguageInstaller":  true
+                           },
+                  "mac":  {
+                              "target":  "dmg",
+                              "icon":  "assets/icon.icns",
+                              "category":  "public.app-category.utilities"
+                          },
+                  "linux":  {
+                                "target":  [
+                                               "AppImage",
+                                               "deb"
+                                           ],
+                                "icon":  "assets/icon.png",
+                                "category":  "Network"
+                            }
+              },
+    "devDependencies":  {
+                            "electron":  "^33.0.0",
+                            "electron-builder":  "^25.0.0"
+                        }
+}

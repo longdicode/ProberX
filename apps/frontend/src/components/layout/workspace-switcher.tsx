@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { ChevronsUpDown, Plus, Building2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useState } from "react";
@@ -16,6 +16,7 @@ export function WorkspaceSwitcher() {
   const { t } = useLocale();
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
+  const didInit = useRef(false);
 
   const handleCreate = async () => {
     setCreating(true);
@@ -29,11 +30,19 @@ export function WorkspaceSwitcher() {
   };
 
   useEffect(() => {
-    if (workspaces && workspaces.length > 0) {
-      setList(workspaces);
-      if (!current) setCurrent(workspaces[0]);
+    if (!workspaces || workspaces.length === 0) return;
+    setList(workspaces);
+    
+    if (didInit.current) return;
+    didInit.current = true;
+    
+    // Keep current if it's still valid
+    if (current && workspaces.some((w) => w.id === current.id)) {
+      return;
     }
-  }, [workspaces, current, setList, setCurrent]);
+    // Otherwise pick first (and persist it)
+    setCurrent(workspaces[0]);
+  }, [workspaces]);
 
   const all = list.length > 0 ? list : (workspaces ?? []);
 
