@@ -5,7 +5,6 @@ import { QueryProvider } from "@/providers/query-provider";
 import { AuthProvider } from "@/providers/auth-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
-import { PwaRegister } from "@/components/shared/pwa-register";
 import { ToastInitializer } from "@/components/shared/toast-initializer";
 import "./globals.css";
 
@@ -51,7 +50,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <QueryProvider>
             <TooltipProvider delay={300}>
               <AuthProvider>
-                <PwaRegister />
                 <ToastInitializer />
                 {children}
                 <Toaster position="top-right" richColors closeButton />

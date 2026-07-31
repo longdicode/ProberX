@@ -14,8 +14,8 @@
   },
   "dependencies": {
     "@fastify/cors": "^10.1.0",
-    "@fastify/multipart": "^9.0.3",
     "@fastify/jwt": "^9.1.0",
+    "@fastify/multipart": "^9.0.3",
     "@fastify/websocket": "^11.1.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.77.3",
@@ -26,16 +26,16 @@
     "fastify-plugin": "^5.0.1",
     "ioredis": "^5.8.2",
     "nodemailer": "^8.0.8",
-    "pg": "^8.16.3",
+    "pg": "^8.22.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.0",
-    "@types/pg": "^8.11.16",
+    "@types/pg": "^8.20.0",
     "@types/ws": "^8.18.1",
-    "drizzle-kit": "^0.31.4",
+    "drizzle-kit": "^0.31.10",
     "tsx": "^4.19.4",
     "typescript": "^5",
     "vitest": "^1.6.0"

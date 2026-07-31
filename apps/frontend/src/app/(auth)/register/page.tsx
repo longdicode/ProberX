@@ -1,4 +1,5 @@
 "use client";
+import { Radio } from "lucide-react";
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -10,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Radio } from "lucide-react";
 import { toast } from "sonner";
 import { registerSchema, type RegisterInput } from "@/lib/validators";
 

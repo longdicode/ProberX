@@ -21,11 +21,6 @@ export function useDashboardData() {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Auto-select first workspace when none is selected
-  useEffect(() => {
-    if (!current && workspaces && workspaces.length > 0) {
-      setCurrent(workspaces[0]);
-    }
-  }, [workspaces, current, setCurrent]);
 
   const handleCreateWorkspace = async () => {
     setCreating(true);

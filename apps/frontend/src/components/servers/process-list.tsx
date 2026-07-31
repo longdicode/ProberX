@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLocale } from "@/stores/locale-store";
@@ -31,6 +31,10 @@ export function ProcessList({ workspaceId, serverId }: Props) {
     } catch { setProcesses([]); }
     finally { setLoading(false); }
   };
+
+  useEffect(() => {
+    fetchProcesses();
+  }, [workspaceId, serverId]);
 
   return (
     <Card className="border-border/50">

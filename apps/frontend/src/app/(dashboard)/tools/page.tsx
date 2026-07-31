@@ -34,9 +34,6 @@ export default function ToolsPage() {
   const { data: workspaces, isLoading: wsLoading } = useWorkspaces();
   const { data: servers, isLoading: serversLoading } = useServers(current?.id);
 
-  useEffect(() => {
-    if (!current && workspaces && workspaces.length > 0) setCurrent(workspaces[0]);
-  }, [current, workspaces, setCurrent]);
 
   function selectServer(sid: string) {
     router.push(`/tools?serverId=${sid}`);

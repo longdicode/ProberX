@@ -59,10 +59,17 @@ export const useAuthStore = create<AuthState>((set) => ({
     if (token) {
       try {
         const user = await api.get<User>("/auth/me");
+        setStoredUser(user);
         set({ token, user, isAuthenticated: true, isLoading: false });
       } catch {
-        clearTokens();
-        set({ token: null, user: null, isAuthenticated: false, isLoading: false });
+        // Fallback to stored user if API fails (network issues, etc.)
+        const storedUser = getStoredUser();
+        if (storedUser) {
+          set({ token, user: storedUser, isAuthenticated: true, isLoading: false });
+        } else {
+          clearTokens();
+          set({ token: null, user: null, isAuthenticated: false, isLoading: false });
+        }
       }
     } else {
       set({ token: null, user: null, isAuthenticated: false, isLoading: false });

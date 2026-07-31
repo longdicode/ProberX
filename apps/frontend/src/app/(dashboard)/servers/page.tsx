@@ -80,9 +80,6 @@ export default function ServersPage() {
     setBatchRunning(false);
   }
 
-  useEffect(() => {
-    if (!current && workspaces && workspaces.length > 0) setCurrent(workspaces[0]);
-  }, [workspaces, current, setCurrent]);
 
   function resetDialog() {
     setOpen(false);

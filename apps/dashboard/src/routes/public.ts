@@ -1,9 +1,10 @@
-import type { FastifyPluginAsync } from "fastify";
+﻿import type { FastifyPluginAsync } from "fastify";
 import { eq, desc } from "drizzle-orm";
 import * as statusPageService from "../services/status-page.service";
 import { servers } from "../db/schema/servers";
 import { monitorTasks } from "../db/schema/monitor-tasks";
 import { probeResults } from "../db/schema/probe-results";
+import { metricSnapshots } from "../db/schema/metric-snapshots";
 
 export const publicRoutes: FastifyPluginAsync = async (app) => {
   app.get("/status/:slug", async (req, reply) => {
@@ -12,7 +13,7 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
       const sp = await statusPageService.getBySlug(slug, app.db);
 
       const serverList = await app.db
-        .select({ id: servers.id, name: servers.name, isOnline: servers.isOnline, lastSeenAt: servers.lastSeenAt })
+        .select({ id: servers.id, name: servers.name, isOnline: servers.isOnline, lastSeenAt: servers.lastSeenAt, hostInfo: servers.hostInfo })
         .from(servers)
         .where(eq(servers.workspaceId, sp.workspaceId));
 
@@ -35,6 +36,44 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
         }
       }
 
+      // Latest metric snapshot per server
+      const serverMetrics: Record<string, Record<string, unknown>> = {};
+      for (const s of serverList) {
+        const [latestMetric] = await app.db
+          .select({
+            cpuPercent: metricSnapshots.cpuPercent,
+            memTotal: metricSnapshots.memTotal,
+            memUsed: metricSnapshots.memUsed,
+            diskTotal: metricSnapshots.diskTotal,
+            diskUsed: metricSnapshots.diskUsed,
+            netInBytes: metricSnapshots.netInBytes,
+            netOutBytes: metricSnapshots.netOutBytes,
+            load1: metricSnapshots.load1,
+            load5: metricSnapshots.load5,
+            load15: metricSnapshots.load15,
+            time: metricSnapshots.time,
+          })
+          .from(metricSnapshots)
+          .where(eq(metricSnapshots.serverId, s.id))
+          .orderBy(desc(metricSnapshots.time))
+          .limit(1);
+        if (latestMetric) {
+          serverMetrics[s.id] = {
+            cpuPercent: latestMetric.cpuPercent ? Number(latestMetric.cpuPercent) : null,
+            memTotal: latestMetric.memTotal,
+            memUsed: latestMetric.memUsed,
+            diskTotal: latestMetric.diskTotal,
+            diskUsed: latestMetric.diskUsed,
+            netInBytes: latestMetric.netInBytes,
+            netOutBytes: latestMetric.netOutBytes,
+            load1: latestMetric.load1 ? Number(latestMetric.load1) : null,
+            load5: latestMetric.load5 ? Number(latestMetric.load5) : null,
+            load15: latestMetric.load15 ? Number(latestMetric.load15) : null,
+            updatedAt: latestMetric.time,
+          };
+        }
+      }
+
       const allServersOnline = serverList.length > 0 && serverList.every((s) => s.isOnline);
       const probes = Object.values(probeMap);
       const allMonitorsHealthy = probes.length > 0 && probes.every((p) => p.isSuccess);
@@ -50,6 +89,8 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
           type: "server" as const,
           status: s.isOnline ? ("operational" as const) : ("down" as const),
           detail: s.isOnline ? "Online" : "Offline",
+          hostInfo: s.hostInfo,
+          metrics: serverMetrics[s.id] || null,
         })),
         ...monitorList.map((m) => {
           const probe = probeMap[m.id];
