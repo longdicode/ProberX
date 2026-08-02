@@ -71,7 +71,7 @@ export function Header() {
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem><User className="w-4 h-4 mr-2" /> {t("header.profile")}</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push("/profile")}><User className="w-4 h-4 mr-2" /> {t("header.profile")}</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => { logout(); router.push("/login"); }} className="text-destructive">
               <LogOut className="w-4 h-4 mr-2" /> {t("header.signOut")}
