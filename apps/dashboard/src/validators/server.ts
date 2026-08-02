@@ -7,6 +7,14 @@ export const createServerBody = z.object({
   isHidden: z.boolean().optional().default(false),
   agentHost: z.string().min(1).max(255).optional(),
   agentPort: z.number().int().min(1).max(65535).optional().default(9800),
+  installMode: z.enum(["online", "offline"]).optional().default("offline"),
+  dashboardUrl: z.string().min(1).max(255).optional(),
+  ssh: z.object({
+    host: z.string().min(1).max(255),
+    port: z.number().int().min(1).max(65535).optional().default(22),
+    username: z.string().min(1).max(128).optional().default("root"),
+    password: z.string().min(1).max(512),
+  }, undefined).optional(),
 }, undefined);
 
 export const updateServerBody = z.object({

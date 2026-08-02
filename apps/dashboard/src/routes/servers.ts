@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { createServerBody, updateServerBody } from "../validators/server";
 import { metricsQuery, paginationQuery } from "../validators/common";
 import * as service from "../services/server.service";
+import { getInstallTask, uninstallAgentViaSsh } from "../services/agent-install.service";
 import * as metricsService from "../services/metrics.service";
 import * as dockerService from "../services/docker.service";
 import * as fileopsService from "../services/fileops.service";
@@ -13,6 +14,16 @@ const runProbeBody = z.object({
   type: z.enum(["http", "tcp", "ping", "dns", "ssl"]),
   target: z.string().min(1),
   timeoutMs: z.number().int().min(1000).max(30000).optional(),
+}, undefined);
+
+const deleteServerBody = z.object({
+  uninstall: z.boolean().optional().default(false),
+  ssh: z.object({
+    host: z.string().min(1).max(255),
+    port: z.number().int().min(1).max(65535).optional().default(22),
+    username: z.string().min(1).max(128).optional().default("root"),
+    password: z.string().min(1).max(512),
+  }, undefined).optional(),
 }, undefined);
 
 export const serverRoutes: FastifyPluginAsync = async (app) => {
@@ -41,7 +52,20 @@ export const serverRoutes: FastifyPluginAsync = async (app) => {
 
   app.delete("/workspaces/:wid/servers/:id", { preHandler: [app.authenticate, app.guardWorkspace()] }, async (req, reply) => {
     const { wid, id } = req.params as { wid: string; id: string };
+    const body = deleteServerBody.parse(req.body ?? {});
+    const result: Record<string, unknown> = { deleted: true };
+    if (body.uninstall && body.ssh) {
+      try {
+        const uninstall = await uninstallAgentViaSsh(body.ssh);
+        result.uninstallSuccess = uninstall.success;
+        result.uninstallLog = uninstall.log;
+      } catch (err) {
+        result.uninstallSuccess = false;
+        result.uninstallLog = err instanceof Error ? err.message : String(err);
+      }
+    }
     await service.remove(wid, id, app.db);
+    if (body.uninstall) return reply.send(result);
     return reply.code(204).send();
   });
 
@@ -54,6 +78,40 @@ export const serverRoutes: FastifyPluginAsync = async (app) => {
   app.post("/workspaces/:wid/servers/:id/regenerate-token", { preHandler: [app.authenticate, app.guardWorkspace()] }, async (req, reply) => {
     const { wid, id } = req.params as { wid: string; id: string };
     return reply.send(await service.regenerateToken(wid, id, app.db));
+  });
+
+  // SSE: live agent install progress for online installs
+  app.get("/workspaces/:wid/servers/:id/install/log", { preHandler: [app.authenticate, app.guardWorkspace()] }, async (req, reply) => {
+    const { wid, id } = req.params as { wid: string; id: string };
+    await service.getById(wid, id, app.db);
+    const task = getInstallTask(id);
+    if (!task) return reply.code(404).send({ error: "No active install task for this server" });
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    const send = (lines: string, done: boolean, success: boolean) => {
+      reply.raw.write("event: log\ndata: " + JSON.stringify({ lines, done, success }) + "\n\n");
+    };
+    const listener = (lines: string, done: boolean, success: boolean) => {
+      send(lines, done, success);
+      if (done) {
+        cleanup();
+        reply.raw.end();
+      }
+    };
+    const cleanup = () => task.listeners.delete(listener);
+    task.listeners.add(listener);
+    send(task.lines, task.done, task.success);
+    if (task.done) {
+      cleanup();
+      reply.raw.end();
+      return reply;
+    }
+    req.raw.on("close", cleanup);
+    return reply;
   });
 
   // On-demand agent actions (pull model)

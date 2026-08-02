@@ -3,6 +3,7 @@ import { eq, and, desc, inArray } from "drizzle-orm";
 import { servers } from "../db/schema/servers";
 import { metricSnapshots } from "../db/schema/metric-snapshots";
 import { generateAgentSecret } from "../utils/crypto";
+import { installAgentViaSsh, startInstallTask } from "./agent-install.service";
 import { AppError } from "../utils/errors";
 import type { DbClient } from "../db/index";
 import type { CreateServerInput, UpdateServerInput } from "../validators/server";
@@ -69,7 +70,36 @@ export async function create(workspaceId: string, input: CreateServerInput, db: 
 		isHidden: input.isHidden ?? false,
 		hostInfo,
 	}).returning();
-	return { ...server, agentToken: agentSecret };
+	const result: Record<string, unknown> = { ...server, agentToken: agentSecret };
+	const dashboardUrl = input.dashboardUrl || process.env.PUBLIC_DASHBOARD_URL || "http://agent.yqone.cn:4000";
+	const downloadBase = process.env.AGENT_DOWNLOAD_BASE || "https://panel.yqone.cn/downloads";
+	result.installCommand = `curl -fsSL ${downloadBase}/install-agent.sh | sudo bash -s ${dashboardUrl} ${agentSecret} ${agentId}`;
+	if (input.installMode === "online" && input.ssh) {
+		const ssh = input.ssh;
+		result.installStatus = "installing";
+		result.installLog = "";
+		startInstallTask(server.id, async (push) => {
+			push("Connecting via SSH to " + ssh.host + "...\n");
+			try {
+				const install = await installAgentViaSsh(ssh, {
+					dashboardUrl,
+					agentToken: agentSecret,
+					agentId,
+					downloadBase,
+				}, push);
+				if (!install.success) {
+					push("\n[FAILED] Agent install did not complete successfully.\n");
+					return false;
+				}
+				push("\n[DONE] Agent installed and online.\n");
+				return true;
+			} catch (err) {
+				push("\n[ERROR] " + (err instanceof Error ? err.message : String(err)) + "\n");
+				return false;
+			}
+		});
+	}
+	return result;
 }
 
 export async function getById(workspaceId: string, serverId: string, db: DbClient) {

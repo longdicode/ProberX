@@ -1,0 +1,8 @@
+{
+  "schema": "./apps/dashboard/src/db/schema/index.ts",
+  "out": "./apps/dashboard/src/db/migrations",
+  "dialect": "postgresql",
+  "dbCredentials": {
+    "url": ""
+  }
+}
