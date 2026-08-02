@@ -306,6 +306,11 @@ func saveShellAIConfig(cfg ShellAIConfig) error {
 	return nil
 }
 
+// LoadShellAIConfigInternal returns the raw saved Shell AI config (unmasked).
+func LoadShellAIConfigInternal() (ShellAIConfig, error) {
+	return loadShellAIConfig()
+}
+
 // LoadShellAIConfigPublic returns the Shell AI config with api_key masked.
 func LoadShellAIConfigPublic() (ShellAIConfig, error) {
 	cfg, err := loadShellAIConfig()

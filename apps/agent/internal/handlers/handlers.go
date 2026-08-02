@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -40,7 +41,7 @@ func NewConfig(agentToken, agentId, agentHost string) *Config {
 				if agentToken != "" {
 					return r.URL.Query().Get("token") == agentToken
 				}
-				return true // dev mode â€?no token configured
+				return true // dev mode - no token configured
 			},
 		},
 	}
@@ -1233,6 +1234,23 @@ func (c *Config) HandleToolsShellAIGenerate(w http.ResponseWriter, r *http.Reque
 		tools.WriteError(w, http.StatusBadRequest, "prompt is required")
 		return
 	}
+	// Fall back to the saved config for missing or masked credentials.
+	if cfg, err := tools.LoadShellAIConfigInternal(); err == nil {
+		if req.APIKey == "" || strings.Contains(req.APIKey, "*") {
+			if cfg.APIKey != "" {
+				req.APIKey = cfg.APIKey
+			}
+		}
+		if req.Model == "" {
+			req.Model = cfg.Model
+		}
+		if req.APIURL == "" {
+			req.APIURL = cfg.APIURL
+		}
+		if req.Provider == "" {
+			req.Provider = cfg.Provider
+		}
+	}
 	if req.Provider != "custom" && req.Provider != "claude" {
 		if req.APIKey == "" {
 			tools.WriteError(w, http.StatusBadRequest, "api_key is required")
@@ -1264,6 +1282,12 @@ func (c *Config) HandleToolsShellAIConfigSave(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		tools.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
+	}
+	// Preserve the existing API key when the client does not send a new one.
+	if cfg.APIKey == "" {
+		if existing, err := tools.LoadShellAIConfigInternal(); err == nil {
+			cfg.APIKey = existing.APIKey
+		}
 	}
 	if err := tools.SaveShellAIConfigInternal(cfg); err != nil {
 		tools.WriteError(w, http.StatusInternalServerError, err.Error())
