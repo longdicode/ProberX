@@ -93,6 +93,9 @@ export const issueSSL = (wid: string, sid: string, body: { domain: string; email
 export const renewSSL = (wid: string, sid: string, body: { domain: string }, db: DbClient) =>
   POST(wid, sid, "/tools/ssl/renew", { body, timeout: 120_000 }, db);
 
+export const listSSLCerts = (wid: string, sid: string, db: DbClient) =>
+  GET(wid, sid, "/tools/ssl/certs", {}, db);
+
 // ── Logs ──────────────────────────────────────────────────────────
 
 export const fetchLogs = (wid: string, sid: string, params: { unit?: string; lines?: number; since?: string }, db: DbClient) =>

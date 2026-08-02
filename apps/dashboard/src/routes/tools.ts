@@ -61,6 +61,8 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
     (w, s, b, db) => svc.issueSSL(w, s, b, db));
   postRoute(app, auth, "/workspaces/:wid/servers/:id/tools/ssl/renew",
     (w, s, b, db) => svc.renewSSL(w, s, b, db));
+  getRoute(app, auth, "/workspaces/:wid/servers/:id/tools/ssl/certs",
+    (w, s, _q, db) => svc.listSSLCerts(w, s, db));
 
   // Logs
   getRoute(app, auth, "/workspaces/:wid/servers/:id/tools/logs",

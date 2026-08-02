@@ -60,7 +60,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api/v1}
-        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:3001/ws} (fix: agent auth headers, MCP route reply check, process-list auto-load, auth store localStorage fallback, docker.service return fix)
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:3001/ws}
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:

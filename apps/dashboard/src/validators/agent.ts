@@ -7,7 +7,7 @@ export const agentRegisterBody = z.object({
 
 export const agentHeartbeatBody = z.object({
   agentId: z.string().min(1).max(64),
-  timestamp: z.number(),
+  timestamp: z.number().optional(),
   metrics: z.object({
     cpu: z.number().optional(),
     mem: z.number().optional(),
@@ -17,14 +17,14 @@ export const agentHeartbeatBody = z.object({
 
 export const agentMetricsBody = z.object({
   agentId: z.string().min(1).max(64),
-  timestamp: z.number(),
+  timestamp: z.number().optional(),
   cpu_percent: z.number().min(0).max(100).optional(),
-  mem_total: z.number().int().positive().optional(),
-  mem_used: z.number().int().positive().optional(),
-  disk_total: z.number().int().positive().optional(),
-  disk_used: z.number().int().positive().optional(),
-  net_in_bytes: z.number().int().positive().optional(),
-  net_out_bytes: z.number().int().positive().optional(),
+  mem_total: z.number().int().min(0).optional(),
+  mem_used: z.number().int().min(0).optional(),
+  disk_total: z.number().int().min(0).optional(),
+  disk_used: z.number().int().min(0).optional(),
+  net_in_bytes: z.number().int().min(0).optional(),
+  net_out_bytes: z.number().int().min(0).optional(),
   load_1: z.number().optional(),
   load_5: z.number().optional(),
   load_15: z.number().optional(),
