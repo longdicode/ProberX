@@ -17,6 +17,7 @@ type RequestOptions = {
   params?: Record<string, string | number | boolean | undefined>;
   headers?: Record<string, string>;
   noToast?: boolean;
+  skipRefresh?: boolean;
 };
 
 let toastError: ((msg: string) => void) | null = null;
@@ -55,11 +56,11 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
-async function handleResponse<T>(res: Response, noToast?: boolean): Promise<T> {
+async function handleResponse<T>(res: Response, noToast?: boolean, skipRefresh = false): Promise<T> {
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    if (res.status === 401) {
+    if (res.status === 401 && !skipRefresh) {
       if (!isRefreshing) {
         isRefreshing = true;
         refreshPromise = refreshAccessToken().finally(() => {
@@ -97,13 +98,14 @@ function buildUrl(path: string, params?: Record<string, string | number | boolea
   return url.toString();
 }
 
-async function fetchWithRetry(
+async function fetchWithRetry<T>(
   url: string,
   init: RequestInit,
-  noToast?: boolean
-): Promise<Response> {
-  const res = await fetch(url, init);
-  if (res.status === 401) {
+  noToast?: boolean,
+  skipRefresh = false
+): Promise<T> {
+  let res = await fetch(url, init);
+  if (res.status === 401 && !skipRefresh) {
     try {
       await handleResponse(res, noToast);
     } catch (err) {
@@ -111,67 +113,63 @@ async function fetchWithRetry(
         const newToken = getToken();
         if (newToken) {
           const newHeaders = { ...(init.headers as Record<string, string> || {}), Authorization: `Bearer ${newToken}` };
-          return fetch(url, { ...init, headers: newHeaders });
+          res = await fetch(url, { ...init, headers: newHeaders });
+          return handleResponse<T>(res, noToast, true);
         }
       }
       throw err;
     }
   }
-  return res;
+  return handleResponse<T>(res, noToast, skipRefresh);
 }
 
 export const api = {
   async get<T>(path: string, options?: RequestOptions): Promise<T> {
     const token = getToken();
     const url = buildUrl(path, options?.params);
-    const res = await fetchWithRetry(url, {
+    return fetchWithRetry<T>(url, {
       headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(options?.headers || {}) },
-    }, options?.noToast);
-    return handleResponse<T>(res, options?.noToast);
+    }, options?.noToast, options?.skipRefresh);
   },
 
   async post<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
     const token = getToken();
     const url = buildUrl(path);
-    const res = await fetchWithRetry(url, {
+    return fetchWithRetry<T>(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(options?.headers || {}) },
       body: body ? JSON.stringify(body) : undefined,
-    }, options?.noToast);
-    return handleResponse<T>(res, options?.noToast);
+    }, options?.noToast, options?.skipRefresh);
   },
 
   async patch<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
     const token = getToken();
     const url = buildUrl(path);
-    const res = await fetchWithRetry(url, {
+    return fetchWithRetry<T>(url, {
       method: "PATCH",
       headers: { ...(body ? { "Content-Type": "application/json" } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: body ? JSON.stringify(body) : undefined,
-    }, options?.noToast);
-    return handleResponse<T>(res, options?.noToast);
+    }, options?.noToast, options?.skipRefresh);
   },
 
   async put<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
     const token = getToken();
     const url = buildUrl(path);
-    const res = await fetchWithRetry(url, {
+    return fetchWithRetry<T>(url, {
       method: "PUT",
       headers: { ...(body ? { "Content-Type": "application/json" } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: body ? JSON.stringify(body) : undefined,
-    }, options?.noToast);
-    return handleResponse<T>(res, options?.noToast);
+    }, options?.noToast, options?.skipRefresh);
   },
 
   async delete<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
     const token = getToken();
     const url = buildUrl(path);
-    const res = await fetchWithRetry(url, {
+    return fetchWithRetry<T>(url, {
       method: "DELETE",
       headers: { ...(body ? { "Content-Type": "application/json" } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: body ? JSON.stringify(body) : undefined,
-    }, options?.noToast);
-    return handleResponse<T>(res, options?.noToast);
+    }, options?.noToast, options?.skipRefresh);
   },
 };
 

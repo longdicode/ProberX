@@ -30,8 +30,6 @@ const app = Fastify({
   logger: { level: env.NODE_ENV === "production" ? "info" : "debug" },
   bodyLimit: 5 * 1024 * 1024, // 5 MB
   trustProxy: true,
-<<<<<<< HEAD
-=======
 });
 
 // Handle empty JSON body in DELETE/PUT requests
@@ -45,7 +43,6 @@ app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body,
   } catch (err) {
     done(err as Error);
   }
->>>>>>> b833aa1 (fix: agent auth headers, MCP route reply check, process-list auto-load, auth store localStorage fallback, docker.service return fix)
 });
 
 let notificationWorker: Awaited<ReturnType<typeof import("./queues/workers/notification-worker").startNotificationWorker>> | null = null;

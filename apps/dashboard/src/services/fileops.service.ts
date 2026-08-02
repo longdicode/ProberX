@@ -121,4 +121,4 @@ export async function uploadFile(wid: string, sid: string, destPath: string, fil
   });
   if (!res.ok) throw AppError.badRequest(`Upload failed: status ${res.status}`);
   return res.json();
-} (fix: agent auth headers, MCP route reply check, process-list auto-load, auth store localStorage fallback, docker.service return fix)
+}

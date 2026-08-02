@@ -1,4 +1,4 @@
-import { Worker } from "bullmq";
+﻿import { Worker } from "bullmq";
 import { eq } from "drizzle-orm";
 import { connection } from "../connection";
 import type { CronExecJob } from "../cron-queue";
@@ -7,11 +7,14 @@ import type { DbClient } from "../../db/index";
 
 function createProcessor(db: DbClient) {
   return async (job: { data: CronExecJob }) => {
-    const { execId, host, port, command } = job.data;
+    const { execId, host, port, command, serverSecret } = job.data;
+
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (serverSecret) headers.Authorization = `Bearer ${serverSecret}`;
 
     const res = await fetch(`http://${host}:${port}/exec`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ command, timeout_sec: 30 }),
       signal: AbortSignal.timeout(35000),
     });

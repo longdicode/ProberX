@@ -76,6 +76,15 @@ export const cronjobRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(204).send();
   });
 
+  app.post("/workspaces/:wid/cronjobs/:id/run", { preHandler: [app.authenticate, app.guardWorkspace()] }, async (req, reply) => {
+    const { wid, id } = req.params as { wid: string; id: string };
+    const { triggered } = await execService.runNow(wid, id, app.db);
+    return reply.send({
+      triggered,
+      message: triggered > 0 ? `Triggered on ${triggered} server(s)` : "No online servers available",
+    });
+  });
+
   app.get("/workspaces/:wid/cronjobs/:id/executions", { preHandler: [app.authenticate, app.guardWorkspace()] }, async (req, reply) => {
     const { wid, id } = req.params as { wid: string; id: string };
     const limit = (req.query as { limit?: string }).limit ? parseInt((req.query as { limit: string }).limit) : 50;

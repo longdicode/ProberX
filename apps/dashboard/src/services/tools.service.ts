@@ -249,7 +249,7 @@ export const getShellAIConfig = (wid: string, sid: string, db: DbClient) =>
 export const saveShellAIConfig = (wid: string, sid: string, body: { provider: string; model?: string; api_key?: string; api_url?: string }, db: DbClient) =>
   PUT(wid, sid, "/tools/shell-ai/config", { body }, db);
 
-export const executeShellCommand' = (wid: string, sid: string, body: { command: string; timeout?: number }, db: DbClient) => (fix: agent auth headers, MCP route reply check, process-list auto-load, auth store localStorage fallback, docker.service return fix)
+export const executeShellCommand = (wid: string, sid: string, body: { command: string; timeout?: number }, db: DbClient) =>
   POST<{ stdout: string; stderr: string; exit_code: number }>(wid, sid, "/tools/shell-ai/execute", { body, timeout: 60_000 }, db);
 
 // ── Docker Images ──────────────────────────────────────────────────

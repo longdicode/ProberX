@@ -8,8 +8,9 @@ import { PageSkeleton } from "@/components/shared/loading-skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Activity, Bell, AlertTriangle, CheckCircle2, Clock, HardDrive, ArrowUpRight, Plus, Wifi, WifiOff, Maximize, Minimize } from "lucide-react";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { Activity, Bell, CheckCircle2, Clock, HardDrive, ArrowUpRight, Plus, Maximize, Minimize, Server, ShieldAlert, Sparkles } from "lucide-react";
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { cn } from "@/lib/utils";
 
 const RANGE_OPTIONS = [
   { value: "24h", label: "24h" },
@@ -96,142 +97,195 @@ export default function OverviewPage() {
     period: new Date(p.period).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
   }));
 
+  const hour = new Date().getHours();
+  const greeting = hour < 6 ? "夜深了" : hour < 12 ? "早上好" : hour < 18 ? "下午好" : "晚上好";
+
   return (
-    <div className="space-y-6">
+    <div className="relative space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{t("dashboard.overview")}</h1>
-          <p className="text-sm text-muted-foreground mt-1">{t("dashboard.overviewDesc")}</p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={toggleFullscreen}>
-            {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-          </Button>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            {wsState === "connected" ? <Wifi className="w-3.5 h-3.5 text-green-500" /> : <WifiOff className="w-3.5 h-3.5" />}
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary via-primary/80 to-indigo-500 text-primary-foreground shadow-lg shadow-primary/25">
+            <Sparkles className="size-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{greeting}，欢迎回来</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">{t("dashboard.overviewDesc")}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className={cn("flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium", wsState === "connected" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500" : "border-border bg-muted text-muted-foreground")}>
+            {wsState === "connected" ? <Activity className="size-3.5 animate-pulse" /> : <ShieldAlert className="size-3.5" />}
             <span>{wsState === "connected" ? "Live" : wsState}</span>
           </div>
+          <Button variant="outline" size="icon" className="size-8" onClick={toggleFullscreen} title="全屏">
+            {isFullscreen ? <Minimize className="size-4" /> : <Maximize className="size-4" />}
+          </Button>
         </div>
       </div>
 
       {/* Stat Cards */}
       <StatsCards dashboard={dashboard} />
 
-      {/* Alert Trends Chart */}
-      <Card className="border-border/50">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-sm font-medium">{t("dashboard.alertTrends")}</CardTitle>
-          <div className="flex gap-1">
-            {RANGE_OPTIONS.map((opt) => (
-              <Button key={opt.value} size="sm" variant={trendRange === opt.value ? "default" : "outline"} className="h-7 text-xs px-2.5" onClick={() => setTrendRange(opt.value)}>
-                {opt.label}
-              </Button>
-            ))}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {!alertTrends || alertTrends.length === 0 ? (
-            <div className="flex items-center justify-center h-[200px] text-muted-foreground text-sm">{t("dashboard.noAlerts")}</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="period" tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="count" name="Total" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="critical" name={t("dashboard.critical")} stroke="hsl(0,84%,60%)" strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="warning" name={t("dashboard.warning")} stroke="hsl(38,92%,50%)" strokeWidth={1.5} dot={false} />
-                <Line type="monotone" dataKey="resolved" name={t("dashboard.resolved")} stroke="hsl(142,71%,45%)" strokeWidth={1.5} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Server Comparison & Alerts */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Server Comparison Chart */}
-        <Card className="border-border/50">
-          <CardHeader><CardTitle className="text-sm font-medium">{t("dashboard.serverComparison")}</CardTitle></CardHeader>
+      {/* Charts */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Alert Trends */}
+        <Card className="border-border/50 lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <Bell className="size-4 text-primary" />
+              {t("dashboard.alertTrends")}
+            </CardTitle>
+            <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
+              {RANGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setTrendRange(opt.value)}
+                  className={cn("rounded-md px-2.5 py-1 text-xs font-medium transition-colors", trendRange === opt.value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </CardHeader>
           <CardContent>
-            {!serverComp || serverComp.length === 0 ? (
-              <div className="flex items-center justify-center h-[200px] text-muted-foreground text-sm">{t("dashboard.noData")}</div>
+            {!alertTrends || alertTrends.length === 0 ? (
+              <div className="flex h-[230px] items-center justify-center text-sm text-muted-foreground">{t("dashboard.noAlerts")}</div>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={serverComp}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="cpu" name="CPU" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="memory" name={t("servers.memory")} fill="hsl(38,92%,50%)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="disk" name={t("servers.disk")} fill="hsl(262,83%,58%)" radius={[4, 4, 0, 0]} />
-                </BarChart>
+              <ResponsiveContainer width="100%" height={230}>
+                <AreaChart data={trendData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="gradCount" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0.02} />
+                    </linearGradient>
+                    <linearGradient id="gradCritical" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(0, 84%, 60%)" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="hsl(0, 84%, 60%)" stopOpacity={0.02} />
+                    </linearGradient>
+                    <linearGradient id="gradWarning" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="hsl(38, 92%, 50%)" stopOpacity={0.02} />
+                    </linearGradient>
+                    <linearGradient id="gradResolved" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="hsl(142, 71%, 45%)" stopOpacity={0.3} />
+                      <stop offset="100%" stopColor="hsl(142, 71%, 45%)" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
+                  <XAxis dataKey="period" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }} />
+                  <Area type="monotone" dataKey="count" name="Total" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#gradCount)" />
+                  <Area type="monotone" dataKey="critical" name={t("dashboard.critical")} stroke="hsl(0, 84%, 60%)" strokeWidth={1.5} fill="url(#gradCritical)" />
+                  <Area type="monotone" dataKey="warning" name={t("dashboard.warning")} stroke="hsl(38, 92%, 50%)" strokeWidth={1.5} fill="url(#gradWarning)" />
+                  <Area type="monotone" dataKey="resolved" name={t("dashboard.resolved")} stroke="hsl(142, 71%, 45%)" strokeWidth={1.5} fill="url(#gradResolved)" />
+                </AreaChart>
               </ResponsiveContainer>
             )}
           </CardContent>
         </Card>
 
-        {/* Recent Alerts */}
+        {/* Server Comparison */}
         <Card className="border-border/50">
-          <CardHeader><CardTitle className="text-sm font-medium flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> {t("dashboard.recentAlerts")}</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <Server className="size-4 text-primary" />
+              {t("dashboard.serverComparison")}
+            </CardTitle>
+          </CardHeader>
           <CardContent>
-            {!recentAlerts || recentAlerts.length === 0 ? (
-              <div className="text-center py-8">
-                <Bell className="w-12 h-12 text-muted-foreground/20 mx-auto mb-3" />
-                <p className="text-muted-foreground text-sm">{t("dashboard.noAlerts")}</p>
-              </div>
+            {!serverComp || serverComp.length === 0 ? (
+              <div className="flex h-[230px] items-center justify-center text-sm text-muted-foreground">{t("dashboard.noData")}</div>
             ) : (
-              <div className="space-y-2.5">
-                {recentAlerts.slice(0, 5).map((a) => {
-                  const sevColor: Record<string, string> = { warning: "text-yellow-400", critical: "text-red-400", emergency: "text-purple-400" };
-                  return (
-                    <div key={a.id} className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <AlertTriangle className={`w-3 h-3 shrink-0 ${sevColor[a.severity] ?? "text-muted-foreground"}`} />
-                          <span className="text-sm font-medium truncate">{a.ruleName ?? a.message}</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground truncate mt-0.5 ml-[18px]">{a.message}</p>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {a.isResolved ? (
-                          <CheckCircle2 className="w-3 h-3 text-green-400" />
-                        ) : (
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${a.severity === "critical" || a.severity === "emergency" ? "bg-red-500/10 text-red-400" : "bg-yellow-500/10 text-yellow-400"}`}>{a.severity}</span>
-                        )}
-                        <Clock className="w-3 h-3 text-muted-foreground" />
-                        <span className="text-[10px] text-muted-foreground">{new Date(a.createdAt).toLocaleTimeString()}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <ResponsiveContainer width="100%" height={230}>
+                <BarChart data={serverComp} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }} contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 12, fontSize: 12 }} />
+                  <Bar dataKey="cpu" name="CPU" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} maxBarSize={14} />
+                  <Bar dataKey="memory" name={t("servers.memory")} fill="hsl(38, 92%, 50%)" radius={[6, 6, 0, 0]} maxBarSize={14} />
+                  <Bar dataKey="disk" name={t("servers.disk")} fill="hsl(262, 83%, 58%)" radius={[6, 6, 0, 0]} maxBarSize={14} />
+                </BarChart>
+              </ResponsiveContainer>
             )}
           </CardContent>
         </Card>
       </div>
 
+      {/* Recent Alerts */}
+      <Card className="border-border/50">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-sm font-medium">
+            <Bell className="size-4 text-primary" />
+            {t("dashboard.recentAlerts")}
+          </CardTitle>
+          <a href="/alerts" className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary">
+            查看全部
+            <ArrowUpRight className="size-3" />
+          </a>
+        </CardHeader>
+        <CardContent>
+          {!recentAlerts || recentAlerts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10">
+              <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                <CheckCircle2 className="size-6 text-muted-foreground/40" />
+              </div>
+              <p className="mt-3 text-sm text-muted-foreground">{t("dashboard.noAlerts")}</p>
+            </div>
+          ) : (
+            <div className="grid gap-2.5 md:grid-cols-2">
+              {recentAlerts.slice(0, 6).map((a) => {
+                const sevColor: Record<string, string> = { warning: "text-yellow-500", critical: "text-red-500", emergency: "text-purple-500" };
+                const sevBadge: Record<string, string> = { warning: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20", critical: "bg-red-500/10 text-red-500 border-red-500/20", emergency: "bg-purple-500/10 text-purple-500 border-purple-500/20" };
+                return (
+                  <div key={a.id} className="rounded-xl border border-border/60 bg-card/50 p-3 transition-colors hover:border-primary/30 hover:bg-accent/50">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className={cn("size-1.5 shrink-0 rounded-full", a.isResolved ? "bg-emerald-500" : sevColor[a.severity] ?? "bg-muted-foreground")} />
+                          <span className="truncate text-sm font-medium">{a.ruleName ?? a.message}</span>
+                        </div>
+                        <p className="mt-1 truncate text-xs text-muted-foreground">{a.message}</p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {a.isResolved ? (
+                          <CheckCircle2 className="size-3.5 text-emerald-500" />
+                        ) : (
+                          <span className={cn("rounded-md border px-1.5 py-0.5 text-[10px] font-medium capitalize", sevBadge[a.severity] ?? "border-border text-muted-foreground")}>{a.severity}</span>
+                        )}
+                        <Clock className="size-3 text-muted-foreground" />
+                        <span className="text-[10px] text-muted-foreground">{new Date(a.createdAt).toLocaleTimeString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Quick Actions */}
-      <div className="grid gap-4 md:grid-cols-1">
-        <Card className="border-border/50">
-          <CardHeader><CardTitle className="text-sm font-medium flex items-center gap-2"><HardDrive className="w-4 h-4" /> {t("dashboard.quickActions")}</CardTitle></CardHeader>
-          <CardContent className="space-y-1">
-            {[{ label: t("dashboard.addServer"), desc: t("dashboard.addServerDesc"), href: "/servers" },
-              { label: t("dashboard.createMonitor"), desc: t("dashboard.createMonitorDesc"), href: "/monitors" },
-              { label: t("dashboard.configureAlerts"), desc: t("dashboard.configureAlertsDesc"), href: "/alerts" },
-            ].map(({ label, desc, href }) => (
-              <a key={label} href={href} className="flex items-center justify-between p-3 rounded-lg hover:bg-accent transition-colors group">
-                <div><p className="text-sm font-medium group-hover:text-primary">{label}</p><p className="text-xs text-muted-foreground">{desc}</p></div>
-                <ArrowUpRight className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
-              </a>
-            ))}
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[
+          { label: t("dashboard.addServer"), desc: t("dashboard.addServerDesc"), href: "/servers", icon: HardDrive },
+          { label: t("dashboard.createMonitor"), desc: t("dashboard.createMonitorDesc"), href: "/monitors", icon: Activity },
+          { label: t("dashboard.configureAlerts"), desc: t("dashboard.configureAlertsDesc"), href: "/alerts", icon: Bell },
+        ].map(({ label, desc, href, icon: Icon }) => (
+          <a key={label} href={href} className="group relative overflow-hidden rounded-xl border border-border/60 bg-card/50 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5">
+            <div aria-hidden className="absolute -right-6 -top-6 size-20 rounded-full bg-gradient-to-br from-primary/15 to-transparent opacity-0 blur-xl transition-opacity duration-300 group-hover:opacity-100" />
+            <div className="relative flex items-center justify-between">
+              <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors duration-200 group-hover:bg-primary group-hover:text-primary-foreground">
+                <Icon className="size-4" />
+              </div>
+              <ArrowUpRight className="size-4 text-muted-foreground transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
+            </div>
+            <p className="relative mt-3 text-sm font-medium">{label}</p>
+            <p className="relative mt-0.5 text-xs text-muted-foreground">{desc}</p>
+          </a>
+        ))}
       </div>
     </div>
   );

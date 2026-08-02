@@ -77,21 +77,21 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   login: async (email, password) => {
-    const res = await api.post<{ token: string; refreshToken?: string; user: User }>("/auth/login", { email, password });
+    const res = await api.post<{ token: string; refreshToken?: string; user: User }>("/auth/login", { email, password }, { skipRefresh: true });
     setTokens(res.token, res.refreshToken);
     setStoredUser(res.user);
     set({ user: res.user, token: res.token, isAuthenticated: true });
   },
 
   register: async (name, email, password) => {
-    const res = await api.post<{ token: string; user: User }>("/auth/register", { name, email, password });
+    const res = await api.post<{ token: string; user: User }>("/auth/register", { name, email, password }, { skipRefresh: true });
     setTokens(res.token);
     setStoredUser(res.user);
     set({ user: res.user, token: res.token, isAuthenticated: true });
   },
 
   oauthLogin: async (provider, code, redirectUri) => {
-    const res = await api.post<{ token: string; refreshToken?: string; user: User }>("/auth/oauth", { provider, code, redirectUri });
+    const res = await api.post<{ token: string; refreshToken?: string; user: User }>("/auth/oauth", { provider, code, redirectUri }, { skipRefresh: true });
     setTokens(res.token, res.refreshToken);
     setStoredUser(res.user);
     set({ user: res.user, token: res.token, isAuthenticated: true });
