@@ -1,0 +1,47 @@
+import Database from "better-sqlite3";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DB_PATH = path.join(__dirname, "..", "data", "proberx.db");
+
+const db = new Database(DB_PATH);
+
+// Check if already bilingual
+const hero = db.prepare("SELECT content FROM sections WHERE key = ?").get("hero");
+if (hero) {
+  const content = JSON.parse((hero as any).content);
+  if (content.zh && content.en) {
+    console.log("[migrate] Already bilingual, skipping.");
+    db.close();
+    process.exit(0);
+  }
+}
+
+console.log("[migrate] Dropping old sections...");
+db.prepare("DELETE FROM sections").run();
+
+// Inline seed data with bilingual format
+const sections = [
+  { key: "meta", title: "Site Meta", content: { zh: { siteName: "ProberX", title: "ProberX — 服务器监控的下一代选择", description: "轻量、安全、自托管的服务器监控平台。", lang: "zh-CN" }, en: { siteName: "ProberX", title: "ProberX — Next-Gen Server Monitoring", description: "Lightweight, secure, self-hosted server monitoring.", lang: "en" } } },
+  { key: "nav", title: "Navigation", content: { zh: { logoText: "ProberX", links: [{ label: "功能", href: "#features" }, { label: "工具", href: "#tools" }, { label: "技术栈", href: "#tech" }, { label: "部署", href: "#deploy" }], ctaText: "开始使用" }, en: { logoText: "ProberX", links: [{ label: "Features", href: "#features" }, { label: "Tools", href: "#tools" }, { label: "Tech", href: "#tech" }, { label: "Deploy", href: "#deploy" }], ctaText: "Get Started" } } },
+  { key: "hero", title: "Hero Section", content: { zh: { badge: "v1.0 已发布 — 10 大工具就绪", line1: "服务器监控的", line2: "下一代选择", subtitle: "轻量、安全、自托管。覆盖系统监控、数据库管理、备份恢复、安全审计和 AI 命令行，一个平台，运维全搞定。", ctaPrimaryText: "⚡ 在线体验", ctaPrimaryLink: "#", ctaSecondaryText: "📦 自托管部署", ctaSecondaryLink: "#deploy", stats: [{ num: "10+", label: "运维工具" }, { num: "3", label: "平台支持" }, { num: "<50MB", label: "内存占用" }] }, en: { badge: "v1.0 Launched — 10 Tools Ready", line1: "Server Monitoring's", line2: "Next Generation", subtitle: "Lightweight, secure, self-hosted. One platform for all operations.", ctaPrimaryText: "⚡ Try Online", ctaPrimaryLink: "#", ctaSecondaryText: "📦 Self-Host", ctaSecondaryLink: "#deploy", stats: [{ num: "10+", label: "Ops Tools" }, { num: "3", label: "Platforms" }, { num: "<50MB", label: "Memory" }] } } },
+  { key: "features", title: "Features Section", content: { zh: { label: "核心功能", title: "一个平台，<span>运维全闭环</span>", description: "ProberX 将服务器运维常用的 10 个工具整合在一处。", items: [{ icon: "monitor", color: "cyan", title: "实时系统监控", description: "CPU、内存、磁盘、网络、GPU 全维度指标采集。" }, { icon: "database", color: "violet", title: "数据库管理", description: "一键安装 MySQL/PostgreSQL/Redis/MongoDB。" }, { icon: "shield", color: "pink", title: "安全审计中心", description: "SSH 配置审计、Nmap 端口扫描、Fail2ban 管理。" }, { icon: "backup", color: "cyan", title: "智能备份恢复", description: "文件目录 + 数据库双模式备份。" }, { icon: "ai", color: "violet", title: "Shell AI 助手", description: "自然语言 → AI 生成命令 → 一键执行。" }, { icon: "nginx", color: "pink", title: "Nginx 可视化管理", description: "服务启停、虚拟主机 CRUD、SSL 签发。" }] }, en: { label: "Core Features", title: "One Platform, <span>Complete Ops Loop</span>", description: "ProberX integrates 10 essential server ops tools in one place.", items: [{ icon: "monitor", color: "cyan", title: "Real-time Monitoring", description: "CPU, memory, disk, network, GPU — full metrics collection." }, { icon: "database", color: "violet", title: "Database Manager", description: "One-click install MySQL/PostgreSQL/Redis/MongoDB." }, { icon: "shield", color: "pink", title: "Security Audit", description: "SSH audit, Nmap scan, Fail2ban management." }, { icon: "backup", color: "cyan", title: "Smart Backup", description: "File + database dual-mode backup." }, { icon: "ai", color: "violet", title: "Shell AI", description: "Natural language → AI commands → execute." }, { icon: "nginx", color: "pink", title: "Nginx Manager", description: "Service control, vhost CRUD, SSL issuance." }] } } },
+  { key: "tools", title: "Tools Section", content: { zh: { label: "10 大工具", title: "十大运维工具，<span>一网打尽</span>", description: "对标市场领先面板的完整运维功能矩阵。", chips: [{ num: "01", name: "Systemd 服务" }, { num: "02", name: "SSL 证书" }, { num: "03", name: "日志查看" }, { num: "04", name: "软件包" }, { num: "05", name: "Nginx" }, { num: "06", name: "应用部署" }, { num: "07", name: "数据库" }, { num: "08", name: "备份" }, { num: "09", name: "安全中心" }, { num: "10", name: "Shell AI" }], gridItems: [{ emoji: "⚙️", name: "Systemd" }, { emoji: "🔒", name: "SSL" }, { emoji: "📋", name: "日志" }, { emoji: "📦", name: "软件包" }, { emoji: "🌐", name: "Nginx" }, { emoji: "🚀", name: "部署" }, { emoji: "🗄️", name: "数据库" }, { emoji: "💾", name: "备份" }, { emoji: "🛡️", name: "安全" }, { emoji: "🤖", name: "Shell AI" }] }, en: { label: "10 Tools", title: "Ten Ops Tools, <span>All Covered</span>", description: "Complete ops feature matrix comparable to leading panels.", chips: [{ num: "01", name: "Systemd" }, { num: "02", name: "SSL" }, { num: "03", name: "Logs" }, { num: "04", name: "Packages" }, { num: "05", name: "Nginx" }, { num: "06", name: "Deploy" }, { num: "07", name: "Databases" }, { num: "08", name: "Backups" }, { num: "09", name: "Security" }, { num: "10", name: "Shell AI" }], gridItems: [{ emoji: "⚙️", name: "Systemd" }, { emoji: "🔒", name: "SSL" }, { emoji: "📋", name: "Logs" }, { emoji: "📦", name: "Packages" }, { emoji: "🌐", name: "Nginx" }, { emoji: "🚀", name: "Deploy" }, { emoji: "🗄️", name: "Databases" }, { emoji: "💾", name: "Backups" }, { emoji: "🛡️", name: "Security" }, { emoji: "🤖", name: "Shell AI" }] } } },
+  { key: "tech", title: "Tech Stack", content: { zh: { label: "技术栈", title: "现代技术栈，<span>性能即正义</span>", description: "", centerText: "P X", listItems: [{ icon: "🔵", name: "Go 1.24" }, { icon: "▲", name: "Next.js 16" }, { icon: "⚡", name: "Fastify v5" }, { icon: "⚛️", name: "React 19" }, { icon: "🐘", name: "PostgreSQL" }, { icon: "🔴", name: "Redis 7" }] }, en: { label: "Tech Stack", title: "Modern Stack, <span>Performance First</span>", description: "", centerText: "P X", listItems: [{ icon: "🔵", name: "Go 1.24" }, { icon: "▲", name: "Next.js 16" }, { icon: "⚡", name: "Fastify v5" }, { icon: "⚛️", name: "React 19" }, { icon: "🐘", name: "PostgreSQL" }, { icon: "🔴", name: "Redis 7" }] } } },
+  { key: "deploy", title: "Deploy Section", content: { zh: { label: "部署方式", title: "两种方案，<span>同样强大</span>", description: "无论选择在线即用还是完全掌控，ProberX 都提供一流体验。", cards: [{ badge: "SAAS", title: "在线体验", description: "访问在线面板，即刻开始监控。Agent 一行命令安装。", arrowText: "立即注册", link: "#", variant: "online" }, { badge: "SELF-HOSTED", title: "自托管部署", description: "数据完全由你掌控。一行脚本部署 Dashboard + Agent。", arrowText: "查看文档", link: "#deploy", variant: "offline" }] }, en: { label: "Deploy", title: "Two Ways, <span>Equally Powerful</span>", description: "Whether online or self-hosted, ProberX delivers a first-class experience.", cards: [{ badge: "SAAS", title: "Try Online", description: "Visit our panel and start monitoring. Agent installs with one command.", arrowText: "Sign Up", link: "#", variant: "online" }, { badge: "SELF-HOSTED", title: "Self-Host", description: "Your data under your control. One-script Dashboard + Agent deployment.", arrowText: "View Docs", link: "#deploy", variant: "offline" }] } } },
+  { key: "terminal", title: "Terminal Lines", content: { zh: { lines: [{ prompt: "root@proberx:~$", cmd: "proberx agent --start", delay: 800, output: false, text: "" }, { prompt: "", cmd: "", delay: 400, output: true, text: "⚡ Agent v1.0.0 启动中..." }, { prompt: "", cmd: "", delay: 300, output: true, text: "📡 连接 Dashboard..." }, { prompt: "", cmd: "", delay: 500, output: true, text: "✅ 注册成功: agent-d9e4c957" }, { prompt: "", cmd: "", delay: 200, output: true, text: "" }, { prompt: "root@proberx:~$", cmd: "proberx monitor --all", delay: 1000, output: false, text: "" }, { prompt: "", cmd: "", delay: 400, output: true, text: "CPU: 3.0%  |  MEM: 736MB/2.0GB  |  DISK: 29%" }, { prompt: "", cmd: "", delay: 300, output: true, text: "NET IN: 1.2MB/s  |  NET OUT: 0.4MB/s  |  LOAD: 0.08" }] }, en: { lines: [{ prompt: "root@proberx:~$", cmd: "proberx agent --start", delay: 800, output: false, text: "" }, { prompt: "", cmd: "", delay: 400, output: true, text: "⚡ Agent v1.0.0 starting..." }, { prompt: "", cmd: "", delay: 300, output: true, text: "📡 Connecting to dashboard..." }, { prompt: "", cmd: "", delay: 500, output: true, text: "✅ Registered: agent-d9e4c957" }, { prompt: "", cmd: "", delay: 200, output: true, text: "" }, { prompt: "root@proberx:~$", cmd: "proberx monitor --all", delay: 1000, output: false, text: "" }, { prompt: "", cmd: "", delay: 400, output: true, text: "CPU: 3.0%  |  MEM: 736MB/2.0GB  |  DISK: 29%" }, { prompt: "", cmd: "", delay: 300, output: true, text: "NET IN: 1.2MB/s  |  NET OUT: 0.4MB/s  |  LOAD: 0.08" }] } } },
+  { key: "footer", title: "Footer", content: { zh: { copyright: "© 2026 ProberX. 自托管服务器监控，重新定义。" }, en: { copyright: "© 2026 ProberX. Self-hosted server monitoring, redefined." } } },
+  { key: "i18n", title: "i18n Labels", content: { zh: { langSwitch: "English" }, en: { langSwitch: "中文" } } },
+];
+
+const insert = db.prepare("INSERT OR REPLACE INTO sections (key, title, content, updated_at) VALUES (?, ?, ?, datetime('now'))");
+const tx = db.transaction(() => {
+  for (const s of sections) {
+    insert.run(s.key, s.title, JSON.stringify(s.content));
+  }
+});
+tx();
+
+console.log(`[migrate] Inserted ${sections.length} bilingual sections.`);
+db.close();

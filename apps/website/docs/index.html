@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProberX 文档</title>
+<style>
+:root {
+  --bg: #0a0a0f; --card: #111118; --border: #1e1e2e; --text: #cdd6f4;
+  --muted: #6c7086; --accent: #89b4fa; --code-bg: #181825;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.7; }
+.sidebar { position: fixed; top:0; left:0; width: 260px; height: 100vh; background: var(--card); border-right: 1px solid var(--border); padding: 24px 20px; overflow-y: auto; }
+.sidebar h2 { font-size: 18px; margin-bottom: 24px; color: var(--accent); }
+.sidebar nav a { display: block; padding: 6px 0; color: var(--muted); text-decoration: none; font-size: 14px; transition: .2s; }
+.sidebar nav a:hover, .sidebar nav a.active { color: var(--accent); }
+.sidebar nav .section { margin-top: 16px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); padding-bottom: 4px; }
+.content { margin-left: 260px; padding: 40px 60px; max-width: 900px; }
+h1 { font-size: 32px; margin-bottom: 8px; }
+h2 { font-size: 22px; margin: 40px 0 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+h3 { font-size: 17px; margin: 24px 0 8px; color: var(--accent); }
+p { margin: 12px 0; color: var(--text); }
+code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+pre { background: var(--code-bg); padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.5; margin: 16px 0; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 14px; }
+th { color: var(--accent); font-weight: 600; }
+ul, ol { margin: 12px 0; padding-left: 24px; }
+li { margin: 6px 0; }
+.note { background: var(--code-bg); border-left: 3px solid var(--accent); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 14px; }
+.warn { border-left-color: #f9e2af; }
+.menu-btn { display:none; position:fixed; top:12px; left:12px; z-index:100; background:var(--card); border:1px solid var(--border); color:var(--accent); font-size:20px; width:40px; height:40px; border-radius:8px; cursor:pointer; }
+.overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:49; }
+@media(max-width:768px) {
+  .sidebar { transform:translateX(-100%); z-index:50; transition:transform .3s; }
+  .sidebar.open { transform:translateX(0); }
+  .menu-btn { display:flex; align-items:center; justify-content:center; }
+  .overlay.show { display:block; }
+  .content { margin-left:0; padding:60px 20px 40px; }
+  h1 { font-size:24px; }
+  h2 { font-size:18px; }
+  pre { font-size:12px; padding:12px; }
+  table { font-size:12px; }
+  th, td { padding:6px 8px; }
+}
+</style>
+</head>
+<body>
+<button class="menu-btn" onclick="toggleSidebar()">☰</button>
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+<div class="sidebar" id="sidebar">
+  <h2>ProberX 文档</h2>
+  <nav>
+    <a href="#intro">简介</a>
+    <a href="#quickstart">快速开始</a>
+    <a href="#install-agent">安装 Agent</a>
+    <a href="#env">环境变量</a>
+    <div class="section">功能指南</div>
+    <a href="#dashboard">管理后台</a>
+    <a href="#servers">服务器管理</a>
+    <a href="#monitors">监控探测</a>
+    <a href="#alerts">告警通知</a>
+    <a href="#cron">Cron 计划任务</a>
+    <a href="#tools">运维工具箱</a>
+    <a href="#backup">云备份</a>
+    <a href="#dns">DNS 管理</a>
+    <a href="#status">公开状态页</a>
+    <div class="section">开发</div>
+    <a href="#architecture">架构</a>
+    <a href="#api">API 参考</a>
+    <a href="#deploy">生产部署</a>
+    <a href="#troubleshoot">问题排查</a>
+  </nav>
+</div>
+<div class="content">
+<h1 id="intro">ProberX 使用指南</h1>
+<p>轻量级自托管服务器管理与监控平台。不止于监控 — 集成 14 个运维工具箱，覆盖日常运维全链路。</p>
+
+<h2 id="quickstart">快速开始</h2>
+<h3>Docker 一键部署</h3>
+<pre><code>git clone https://github.com/longdicode/ProberX.git
+cd ProberX
+bash setup.sh</code></pre>
+<h3>手动部署</h3>
+<pre><code>cp .env.example .env
+# 编辑 .env — 修改 JWT_SECRET 和 POSTGRES_PASSWORD
+docker compose -f docker-compose.prod.yml up -d</code></pre>
+<p>启动后访问：</p>
+<ul>
+  <li><strong>管理后台</strong>: <code>http://your-server:3000</code></li>
+  <li><strong>API 健康检查</strong>: <code>http://your-server:4000/health</code></li>
+</ul>
+
+<h2 id="install-agent">安装 Agent</h2>
+<p>Agent 是部署在被监控服务器上的探针。Go 单二进制，零依赖。</p>
+<pre><code># 一键安装（需要 TOKEN）
+curl -fsSL https://panel.yqone.cn/install-agent.sh | sudo bash -s http://agent.yqone.cn:4000 YOUR_AGENT_TOKEN YOUR_AGENT_ID
+
+# Token 获取方式：
+# 1. 登录 ProberX 后台 -> 服务器 -> 创建服务器
+# 2. 填写服务器名称和 Agent 地址 -> 创建
+# 3. 复制生成的 AGENT_TOKEN 和 AGENT_ID
+# 4. 粘贴到上面的安装命令中
+
+# 或手动下载
+wget https://panel.yqone.cn/downloads/proberx-agent-linux-amd64 -O /usr/local/bin/proberx-agent
+chmod +x /usr/local/bin/proberx-agent
+export DASHBOARD_URL=http://agent.yqone.cn:4000
+export AGENT_TOKEN=your-token
+export AGENT_ID=your-agent-id
+proberx-agent</code></pre>
+
+<div class="note"><strong>提示</strong>: Agent 启动后会自动注册到 Dashboard。在管理后台"服务器"页面可以看到它。</div>
+
+<h2 id="env">环境变量</h2>
+<table>
+  <tr><th>变量</th><th>默认值</th><th>说明</th></tr>
+  <tr><td><code>PORT</code></td><td>3001</td><td>Dashboard 端口 (容器内部)</td></tr>
+  <tr><td><code>DATABASE_URL</code></td><td>-</td><td>PostgreSQL 连接串</td></tr>
+  <tr><td><code>REDIS_URL</code></td><td>redis://localhost:6379</td><td>Redis 连接串</td></tr>
+  <tr><td><code>JWT_SECRET</code></td><td>- (最少16位)</td><td>JWT 签名密钥</td></tr>
+  <tr><td><code>CORS_ORIGIN</code></td><td>http://localhost:3000</td><td>允许的跨域来源，逗号分隔</td></tr>
+  <tr><td><code>QUEUE_ENABLED</code></td><td>false</td><td>启用 BullMQ 消息队列</td></tr>
+  <tr><td><code>DASHBOARD_PORT</code></td><td>3001</td><td>Dashboard 宿主机端口</td></tr>
+  <tr><td><code>FRONTEND_PORT</code></td><td>3000</td><td>前端宿主机端口</td></tr>
+</table>
+
+<h3>Agent 环境变量</h3>
+<table>
+  <tr><th>变量</th><th>默认值</th><th>说明</th></tr>
+  <tr><td><code>DASHBOARD_URL</code></td><td>-</td><td>Dashboard 地址</td></tr>
+  <tr><td><code>AGENT_TOKEN</code></td><td>-</td><td>认证 Token</td></tr>
+  <tr><td><code>AGENT_PORT</code></td><td>9800</td><td>Agent HTTP 端口</td></tr>
+  <tr><td><code>AGENT_ID</code></td><td>hostname-pid</td><td>Agent 唯一标识</td></tr>
+</table>
+
+<h2 id="dashboard">管理后台</h2>
+<p>管理后台是 ProberX 的核心操作界面。首次启动后：</p>
+<ol>
+  <li>访问 <code>http://your-server:3000</code></li>
+  <li>注册管理员账号</li>
+  <li>创建 Workspace（工作空间）</li>
+  <li>在 Workspace 内添加 Server，生成 Agent Token</li>
+  <li>在被监控服务器上安装 Agent</li>
+</ol>
+
+<div class="note"><strong>开发模式</strong>: 设置 <code>NEXT_PUBLIC_AUTH_BYPASS=true</code> 可跳过登录。仅用于本地开发！</div>
+
+<h2 id="servers">服务器管理</h2>
+<p>在 Workspace 中添加服务器后，Dashboard 会每 60 秒从 Agent 拉取指标：</p>
+<ul>
+  <li>CPU 使用率、内存、磁盘、网络流量</li>
+  <li>系统负载 (1m / 5m / 15m)</li>
+  <li>GPU 指标 (nvidia-smi)</li>
+  <li>Docker 容器列表 (CPU / 内存 / 端口 / 状态)</li>
+  <li>进程列表</li>
+</ul>
+<p>支持 WebSSH 终端（浏览器内 Shell）、文件管理器（浏览/上传/下载/编辑）。</p>
+
+<h2 id="monitors">监控探测</h2>
+<p>从 Agent 向目标发起多类型探测：</p>
+<table>
+  <tr><th>类型</th><th>说明</th></tr>
+  <tr><td>HTTP(S)</td><td>URL 可达性、响应时间、状态码、Body 正则匹配</td></tr>
+  <tr><td>TCP</td><td>端口连通性、建连延迟</td></tr>
+  <tr><td>ICMP Ping</td><td>丢包率、RTT 延迟</td></tr>
+  <tr><td>DNS</td><td>解析结果、解析时间</td></tr>
+  <tr><td>SSL</td><td>证书过期时间、链验证</td></tr>
+</table>
+
+<h2 id="alerts">告警通知</h2>
+<p>支持 9 种通知渠道：</p>
+<ul>
+  <li>Webhook / Slack / Discord</li>
+  <li>Email (SMTP)</li>
+  <li>钉钉 (HMAC-SHA256 签名)</li>
+  <li>飞书 (卡片消息)</li>
+  <li>企业微信</li>
+  <li>Telegram / Telegram Bot</li>
+</ul>
+<p>告警规则支持多指标触发、持续时长阈值，避免抖动误报。</p>
+
+<h2 id="cron">Cron 计划任务</h2>
+<p>可视化的 Cron 表达式编辑器，支持：</p>
+<ul>
+  <li>预设快捷选择 (每小时/每天/每周/自定义)</li>
+  <li>分/时/日/月/周 字段可视化编辑</li>
+  <li>人类可读预览 ("每天凌晨 2:00")</li>
+  <li>未来 5 次执行时间预览</li>
+  <li>Server 多选目标</li>
+  <li>编辑、启用/禁用切换</li>
+</ul>
+
+<h2 id="tools">运维工具箱</h2>
+<table>
+  <tr><th>工具</th><th>功能</th></tr>
+  <tr><td>Systemd</td><td>服务列表、start/stop/restart、状态监控</td></tr>
+  <tr><td>SSL</td><td>证书检查 (SAN/过期/指纹)、ACME 签发续期</td></tr>
+  <tr><td>Logs</td><td>journalctl + 文件日志浏览</td></tr>
+  <tr><td>Packages</td><td>apt/yum/dnf 包列表、可升级检测、批量升级</td></tr>
+  <tr><td>Nginx</td><td>状态查看、配置浏览、虚拟主机 CRUD</td></tr>
+  <tr><td>App Store</td><td>18 个预置应用、Docker Compose 一键部署</td></tr>
+  <tr><td>Databases</td><td>MySQL/PostgreSQL/Redis/MongoDB 安装卸载</td></tr>
+  <tr><td>Backups</td><td>文件/数据库备份恢复、云存储同步</td></tr>
+  <tr><td>Security</td><td>SSH 审计、端口扫描、Fail2ban 管理</td></tr>
+  <tr><td>Shell AI</td><td>自然语言 → AI → Shell (OpenAI/DeepSeek/Claude)</td></tr>
+  <tr><td>DNS</td><td>Cloudflare/DNSPod/GoDaddy/Vercel/DO 统一管理</td></tr>
+  <tr><td>Docker</td><td>镜像列表/拉取/删除/检查/清理</td></tr>
+  <tr><td>File Manager</td><td>文件浏览/读写/上传/下载/新建目录</td></tr>
+  <tr><td>Firewall</td><td>iptables 规则管理</td></tr>
+</table>
+
+<h2 id="backup">云备份</h2>
+<p>支持 S3 兼容存储 (AWS S3 / 阿里云 OSS / Cloudflare R2 / MinIO)：</p>
+<ol>
+  <li>在备份工具中打开 "Cloud Settings"</li>
+  <li>选择 Provider，填写 Endpoint、Bucket、Access Key、Secret Key</li>
+  <li>创建备份后一键上传云端</li>
+  <li>开启 Auto Upload — 备份创建后自动同步</li>
+  <li>Sync All — 一键全量同步本地到云端</li>
+  <li>设置 Retention Days 自动清理旧备份</li>
+</ol>
+
+<h2 id="dns">DNS 管理</h2>
+<p>统一管理 5 个 DNS 服务商的域名和解析记录：</p>
+<ul><li>Cloudflare · DNSPod · GoDaddy · Vercel · DigitalOcean</li></ul>
+<p>在 DNS 工具中配置 Provider 的 API Key，即可查看 Zone 列表、增删改 Record (A/AAAA/CNAME/MX/TXT/NS/SRV)。</p>
+
+<h2 id="status">公开状态页</h2>
+<p>创建公开状态页展示服务健康状态：</p>
+<ol>
+  <li>在 Workspace 设置中创建 Status Page</li>
+  <li>设置 slug (例如 <code>my-service</code>)</li>
+  <li>公开访问: <code>http://your-server:4000/api/v1/public/status/my-service</code></li>
+</ol>
+
+<h2 id="architecture">系统架构</h2>
+<pre><code>Browser → Frontend (Next.js :3000) → Dashboard (Fastify :4000) → Agent (Go :9800)
+                                         ↕              ↕
+                                    PostgreSQL + Redis   被监控服务器</code></pre>
+<p><strong>数据流</strong>: Dashboard 每 60 秒通过 HTTP 从 Agent 拉取指标 → 写入 TimescaleDB → WebSocket 实时推送到前端</p>
+<p><strong>Agent 工具调用</strong>: 前端 → Dashboard (代理) → Agent HTTP API → 系统命令 (systemctl/docker/iptables 等)</p>
+
+<h2 id="api">API 参考</h2>
+<p>所有 API 以 <code>/api/v1/</code> 为前缀，JWT Bearer Token 认证。</p>
+<p>超过 80 个端点，覆盖认证、工作空间、服务器、监控、告警、通知、Cron、API Key、状态页、14 个运维工具。</p>
+<p>查看 API 概览: <code>GET /health</code> — 健康检查 (无需认证)</p>
+
+<h2 id="deploy">生产部署</h2>
+<h3>国内服务器注意事项</h3>
+<ol>
+  <li><strong>Docker 镜像加速</strong>: 编辑 <code>/etc/docker/daemon.json</code>，添加 <code>registry-mirrors: ["https://docker.1ms.run"]</code></li>
+  <li><strong>npm 镜像</strong>: <code>npm config set registry https://registry.npmmirror.com</code></li>
+  <li><strong>安全组/防火墙</strong>: 放行 3000 (前端)、4000 (API)、3100 (官网)</li>
+  <li><strong>数据库初始化</strong>: 首次启动后需手动运行 SQL 迁移:
+    <pre><code>for f in apps/dashboard/src/db/migrations/*.sql; do
+  docker exec -i proberx-postgres-1 psql -U proberx -d proberx < "$f"
+done</code></pre>
+  </li>
+</ol>
+<h3>前端重建</h3>
+<div class="note warn"><strong>重要</strong>: <code>NEXT_PUBLIC_*</code> 变量在编译时内嵌。改了 API 地址后必须 <code>docker compose build frontend --no-cache</code>，不能只用 restart。</div>
+
+<h3>环境变量检查清单</h3>
+<ul>
+  <li> <code>NEXT_PUBLIC_API_URL</code> 指向正确公网地址 (如 <code>http://1.2.3.4:4000/api/v1</code>)</li>
+  <li> <code>POSTGRES_PASSWORD</code> 和 <code>DATABASE_URL</code> 密码一致</li>
+  <li> 生产环境 <code>NEXT_PUBLIC_AUTH_BYPASS=false</code></li>
+</ul>
+
+<h2 id="troubleshoot">问题排查</h2>
+<h3>Dashboard 一直重启</h3>
+<pre><code>docker logs proberx-dashboard-1 --tail 20</code></pre>
+<p>常见原因: 数据库表不存在（运行迁移）、密码不匹配（删除 pgdata volume 重建）、module 解析错误（tsconfig 问题）。</p>
+<h3>前端报 "Failed to fetch"</h3>
+<p>常见原因: CORS 未配置、NEXT_PUBLIC_API_URL 地址不对（忘了重建前端）、防火墙未放行端口。</p>
+<h3>Agent 注册失败</h3>
+<p>检查 Agent 能否访问 Dashboard: <code>curl http://your-dashboard:4000/health</code></p>
+<h3>数据库连接失败</h3>
+<p>检查 PostgreSQL 是否健康: <code>docker compose -f docker-compose.prod.yml ps postgres</code></p>
+
+</div>
+<script>
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('show');
+}
+</script>
+</body>
+</html>

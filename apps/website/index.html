@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ProberX — 新一代服务器监控与运维平台</title>
+<meta name="description" content="ProberX 是一款轻量、零侵入的服务器监控与运维平台。一个 Agent，三端掌控：实时监控、WebSSH、Docker、文件管理、定时任务、AI 智能终端，开箱即用，数据自托管。">
+<meta property="og:title" content="ProberX — 新一代服务器监控与运维平台">
+<meta property="og:description" content="一个 Agent，三端掌控。实时监控 · WebSSH · Docker · 定时任务 · AI 终端">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://panel.yqone.cn/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2305060f'/%3E%3Cpath d='M9 21V11l7 6 7-6v10' stroke='%236d8bff' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#05060f;
+  --bg-2:#0a0c1d;
+  --card:rgba(255,255,255,.032);
+  --card-hover:rgba(255,255,255,.06);
+  --border:rgba(255,255,255,.085);
+  --border-strong:rgba(255,255,255,.18);
+  --text:#e9edfb;
+  --muted:#98a2c3;
+  --muted-2:#6b7596;
+  --indigo:#6d8bff;
+  --indigo-2:#9db4ff;
+  --cyan:#37d5f2;
+  --green:#34d399;
+  --amber:#fbbf24;
+  --rose:#fb7185;
+  --grad:linear-gradient(115deg,#6d8bff 0%,#37d5f2 100%);
+  --font-display:"Chakra Petch","PingFang SC","Microsoft YaHei",sans-serif;
+  --font-sans:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono","SFMono-Regular",Consolas,monospace;
+  --radius:18px;
+  --maxw:1180px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--text);font-family:var(--font-sans);
+  line-height:1.65;-webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+::selection{background:rgba(109,139,255,.35);color:#fff}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--indigo);outline-offset:3px;border-radius:6px}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:#1c2138;border-radius:8px;border:2px solid var(--bg)}
+::-webkit-scrollbar-thumb:hover{background:#2a3052}
+
+/* ---------- backdrop layers ---------- */
+.bg-grid{
+  position:fixed;inset:0;z-index:-3;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(109,139,255,.05) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(109,139,255,.05) 1px,transparent 1px);
+  background-size:56px 56px;
+  mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 30%,transparent 78%);
+  -webkit-mask-image:radial-gradient(ellipse 90% 60% at 50% 0%,#000 30%,transparent 78%);
+}
+.bg-glow{
+  position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:
+    radial-gradient(52% 38% at 50% -4%,rgba(109,139,255,.20),transparent 68%),
+    radial-gradient(30% 24% at 88% 22%,rgba(55,213,242,.09),transparent 70%),
+    radial-gradient(34% 30% at 6% 62%,rgba(52,211,153,.05),transparent 70%);
+}
+.noise{
+  position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E");
+}
+
+.container{max-width:var(--maxw);margin:0 auto;padding:0 24px;position:relative}
+
+/* ---------- nav ---------- */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  border-bottom:1px solid transparent;
+  transition:border-color .3s,background .3s;
+}
+nav.scrolled{
+  background:rgba(5,6,15,.78);
+  backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border-bottom-color:var(--border);
+}
+.nav-inner{display:flex;align-items:center;justify-content:space-between;height:68px}
+.logo{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:700;font-size:20px;letter-spacing:.02em}
+.logo-mark{width:30px;height:30px;border-radius:8px;background:linear-gradient(140deg,#0d1230,#121a3f);border:1px solid rgba(109,139,255,.4);display:grid;place-items:center;box-shadow:0 0 18px rgba(109,139,255,.25)}
+.logo-mark svg{width:17px;height:17px}
+.logo em{font-style:normal;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.nav-links{display:flex;align-items:center;gap:30px;font-size:14.5px;color:var(--muted)}
+.nav-links a{transition:color .2s;position:relative}
+.nav-links a:hover{color:var(--text)}
+.nav-links a::after{content:"";position:absolute;left:0;bottom:-5px;width:0;height:1.5px;background:var(--grad);transition:width .25s}
+.nav-links a:hover::after{width:100%}
+.nav-cta{display:flex;align-items:center;gap:12px}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  border-radius:12px;font-size:14.5px;font-weight:600;padding:10px 20px;
+  transition:transform .2s,box-shadow .25s,background .2s,border-color .2s,color .2s;
+  white-space:nowrap;
+}
+.btn-primary{
+  background:var(--grad);color:#04060f;box-shadow:0 6px 26px rgba(109,139,255,.35);
+}
+.btn-primary:hover{transform:translateY(-1px);box-shadow:0 10px 34px rgba(109,139,255,.5)}
+.btn-ghost{border:1px solid var(--border-strong);color:var(--text);background:rgba(255,255,255,.03)}
+.btn-ghost:hover{border-color:var(--indigo);color:var(--indigo-2);transform:translateY(-1px)}
+.btn-sm{padding:8px 16px;font-size:13.5px;border-radius:10px}
+.nav-gh{display:grid;place-items:center;width:38px;height:38px;border-radius:10px;border:1px solid var(--border);color:var(--muted);transition:.2s}
+.nav-gh:hover{color:var(--text);border-color:var(--border-strong);transform:translateY(-1px)}
+.nav-burger{display:none;background:none;border:1px solid var(--border);border-radius:10px;width:40px;height:40px;color:var(--text);place-items:center}
+.nav-mobile{
+  display:none;position:fixed;top:68px;left:0;right:0;z-index:99;
+  background:rgba(5,6,15,.96);backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);padding:18px 24px 26px;flex-direction:column;gap:4px;
+}
+.nav-mobile.open{display:flex}
+.nav-mobile a{padding:13px 8px;font-size:15.5px;color:var(--muted);border-bottom:1px solid rgba(255,255,255,.05)}
+.nav-mobile a:hover{color:var(--text)}
+
+/* ---------- hero ---------- */
+.hero{position:relative;padding:158px 0 92px;overflow:hidden}
+.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
+.badge{
+  display:inline-flex;align-items:center;gap:9px;padding:7px 15px;border-radius:999px;
+  border:1px solid rgba(109,139,255,.35);background:rgba(109,139,255,.09);color:var(--indigo-2);
+  font-size:13px;font-weight:500;letter-spacing:.04em;margin-bottom:26px;
+}
+.badge .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.8)}}
+.hero h1{
+  font-family:var(--font-display);font-weight:700;font-size:clamp(38px,5vw,58px);
+  line-height:1.12;letter-spacing:-.01em;margin-bottom:22px;
+}
+.hero h1 .grad{
+  background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 26px rgba(109,139,255,.35));
+}
+.hero h1 .mono{font-family:var(--font-mono);font-size:.52em;font-weight:600;color:var(--muted-2);display:block;margin-top:14px;letter-spacing:.06em}
+.hero-sub{color:var(--muted);font-size:17px;max-width:540px;margin-bottom:34px}
+.hero-sub b{color:var(--text);font-weight:600}
+.hero-btns{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:38px}
+.hero-btns .btn{padding:14px 28px;font-size:16px;border-radius:14px}
+.hero-stats{display:flex;gap:0;border:1px solid var(--border);border-radius:16px;background:var(--card);overflow:hidden;width:fit-content}
+.hstat{padding:14px 26px;border-right:1px solid var(--border)}
+.hstat:last-child{border-right:none}
+.hstat .num{font-family:var(--font-mono);font-weight:600;font-size:22px;color:var(--text);display:flex;align-items:baseline;gap:2px}
+.hstat .num i{font-style:normal;font-size:13px;color:var(--indigo-2)}
+.hstat .lbl{font-size:12.5px;color:var(--muted-2);margin-top:2px;letter-spacing:.04em}
+/* hero console */
+.console-wrap{position:relative}
+.console-glow{
+  position:absolute;inset:-40px -30px;z-index:-1;pointer-events:none;
+  background:radial-gradient(60% 55% at 50% 30%,rgba(109,139,255,.22),transparent 70%);
+  filter:blur(20px);
+}
+.console{
+  border:1px solid var(--border-strong);border-radius:18px;overflow:hidden;
+  background:linear-gradient(180deg,rgba(20,24,46,.92),rgba(9,11,26,.96));
+  box-shadow:0 30px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.03) inset,0 0 60px rgba(109,139,255,.08);
+  transform:perspective(1400px) rotateY(-6deg) rotateX(2deg);
+  transition:transform .5s ease;
+}
+.console:hover{transform:perspective(1400px) rotateY(-2deg) rotateX(1deg)}
+.c-titlebar{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)}
+.c-dot{width:11px;height:11px;border-radius:50%}
+.c-dot.r{background:#ff5f57}.c-dot.y{background:#febc2e}.c-dot.g{background:#28c840}
+.c-path{margin-left:10px;font-family:var(--font-mono);font-size:12px;color:var(--muted-2);letter-spacing:.03em}
+.c-live{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;color:var(--green)}
+.c-live i{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 1.6s infinite}
+.c-body{display:grid;grid-template-columns:44px 1fr;min-height:340px}
+.c-side{border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;gap:14px;padding:14px 0;background:rgba(255,255,255,.015)}
+.c-side svg{width:18px;height:18px;color:var(--muted-2);transition:color .2s}
+.c-side .active{color:var(--indigo-2);filter:drop-shadow(0 0 6px rgba(109,139,255,.6))}
+.c-main{padding:16px 18px;display:flex;flex-direction:column;gap:14px}
+.c-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.c-stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:11px 13px}
+.c-stat .k{font-size:11px;color:var(--muted-2);display:flex;justify-content:space-between;align-items:center;letter-spacing:.05em}
+.c-stat .k b{font-weight:600;color:var(--muted)}
+.c-stat .v{font-family:var(--font-mono);font-size:19px;font-weight:600;margin:4px 0 7px}
+.c-bar{height:4px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden}
+.c-bar i{display:block;height:100%;border-radius:4px;width:0;transition:width 1.4s cubic-bezier(.22,1,.36,1)}
+.c-stat.cpu .c-bar i{background:linear-gradient(90deg,var(--indigo),var(--cyan))}
+.c-stat.mem .c-bar i{background:linear-gradient(90deg,#8b5cf6,#d946ef)}
+.c-stat.net .c-bar i{background:linear-gradient(90deg,var(--green),#6ee7b7)}
+.c-chart{border:1px solid var(--border);border-radius:12px;padding:12px 13px 8px;background:var(--card)}
+.c-chart .row{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.c-chart .row .t{font-size:11.5px;color:var(--muted-2);letter-spacing:.05em}
+.c-chart .row .l{font-family:var(--font-mono);font-size:11px;color:var(--green)}
+.c-chart svg{width:100%;height:66px;display:block;overflow:visible}
+.chart-line{stroke:url(#cline);stroke-width:2.2;fill:none;stroke-linecap:round;
+  stroke-dasharray:420;stroke-dashoffset:420;animation:draw 2.2s .5s cubic-bezier(.3,.7,.3,1) forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+.chart-fill{fill:url(#cfill);opacity:0;animation:fadein 1s 1.9s forwards}
+@keyframes fadein{to{opacity:1}}
+.c-procs{display:flex;flex-direction:column;gap:7px}
+.c-proc{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:11.5px;padding:6px 9px;border-radius:8px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.05)}
+.c-proc .pdot{width:6px;height:6px;border-radius:50%;flex:none}
+.c-proc .nm{color:var(--muted)}
+.c-proc .pid{color:var(--muted-2);margin-left:auto}
+.c-proc .load{color:var(--indigo-2)}
+.c-term{
+  margin-top:auto;font-family:var(--font-mono);font-size:12px;color:var(--muted);
+  border-top:1px dashed var(--border);padding-top:10px;min-height:30px;display:flex;align-items:center;gap:8px;
+}
+.c-term .pr{color:var(--green)}
+.c-term .cursor{display:inline-block;width:7px;height:14px;background:var(--cyan);animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.float-badge{
+  position:absolute;display:flex;align-items:center;gap:8px;padding:9px 15px;border-radius:12px;
+  background:rgba(10,13,30,.92);border:1px solid var(--border-strong);backdrop-filter:blur(10px);
+  font-family:var(--font-mono);font-size:12px;color:var(--text);
+  box-shadow:0 12px 34px rgba(0,0,0,.5);animation:floaty 5s ease-in-out infinite;
+}
+.float-badge b{color:var(--green);font-weight:600}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+.fb-1{top:-18px;right:8px}
+.fb-2{bottom:56px;left:-26px;animation-delay:-2.5s}
+.fb-2 svg{color:var(--cyan)}
+
+/* ---------- marquee ---------- */
+.marquee{border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:rgba(255,255,255,.015);overflow:hidden;padding:17px 0;position:relative}
+.marquee::before,.marquee::after{content:"";position:absolute;top:0;bottom:0;width:120px;z-index:2;pointer-events:none}
+.marquee::before{left:0;background:linear-gradient(90deg,var(--bg),transparent)}
+.marquee::after{right:0;background:linear-gradient(-90deg,var(--bg),transparent)}
+.marquee-track{display:flex;gap:56px;width:max-content;animation:scroll 30s linear infinite}
+.marquee:hover .marquee-track{animation-play-state:paused}
+@keyframes scroll{to{transform:translateX(-50%)}}
+.marquee-track span{display:inline-flex;align-items:center;gap:12px;font-family:var(--font-mono);font-size:13px;color:var(--muted-2);letter-spacing:.12em;white-space:nowrap}
+.marquee-track span::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--indigo);opacity:.7}
+
+/* ---------- sections ---------- */
+section{padding:96px 0}
+.sec-head{text-align:center;max-width:680px;margin:0 auto 60px}
+.sec-eyebrow{
+  display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12.5px;
+  color:var(--indigo-2);letter-spacing:.22em;text-transform:uppercase;margin-bottom:16px;
+}
+.sec-eyebrow::before,.sec-eyebrow::after{content:"";width:26px;height:1px;background:linear-gradient(90deg,transparent,var(--indigo))}
+.sec-eyebrow::after{background:linear-gradient(90deg,var(--indigo),transparent)}
+.sec-head h2{font-family:var(--font-display);font-size:clamp(28px,3.6vw,40px);font-weight:700;line-height:1.2;margin-bottom:16px}
+.sec-head p{color:var(--muted);font-size:16px}
+
+/* ---------- bento features ---------- */
+.bento{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.b-card{
+  position:relative;border:1px solid var(--border);border-radius:var(--radius);
+  background:var(--card);padding:26px;overflow:hidden;
+  transition:border-color .3s,background .3s,transform .3s,box-shadow .3s;
+}
+.b-card::before{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .4s;
+  background:radial-gradient(120% 80% at 50% 0%,rgba(109,139,255,.12),transparent 60%);
+}
+.b-card:hover::before{opacity:1}
+.b-card:hover{border-color:rgba(109,139,255,.4);transform:translateY(-3px);box-shadow:0 18px 44px rgba(0,0,0,.4),0 0 34px rgba(109,139,255,.1)}
+.w2{grid-column:span 2}
+.b-icon{
+  width:42px;height:42px;border-radius:12px;display:grid;place-items:center;margin-bottom:18px;
+  background:linear-gradient(140deg,rgba(109,139,255,.18),rgba(55,213,242,.1));
+  border:1px solid rgba(109,139,255,.3);color:var(--indigo-2);
+}
+.b-icon svg{width:21px;height:21px}
+.b-card h3{font-size:17.5px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.b-card h3 .tag{font-family:var(--font-mono);font-size:10.5px;color:var(--green);border:1px solid rgba(52,211,153,.35);padding:2px 8px;border-radius:99px;letter-spacing:.06em}
+.b-card p{color:var(--muted);font-size:14px}
+.mini-spark{margin-top:18px;border:1px solid var(--border);border-radius:12px;background:rgba(5,6,15,.5);padding:10px 12px}
+.mini-spark .ms-row{display:flex;gap:18px;margin-bottom:10px}
+.ms-cell{flex:1}
+.ms-cell .k{font-size:10.5px;color:var(--muted-2);letter-spacing:.06em}
+.ms-cell .v{font-family:var(--font-mono);font-size:15px;font-weight:600}
+.ms-cell .v.up{color:var(--green)}.ms-cell .v.down{color:var(--rose)}
+.ai-bubble{margin-top:18px;display:flex;flex-direction:column;gap:9px}
+.ai-bubble .bub{max-width:88%;padding:9px 13px;border-radius:13px;font-size:13.5px;line-height:1.5}
+.ai-bubble .q{background:rgba(109,139,255,.12);border:1px solid rgba(109,139,255,.3);border-top-left-radius:4px;align-self:flex-start}
+.ai-bubble .a{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.28);border-top-right-radius:4px;align-self:flex-end;color:var(--text)}
+.ai-bubble .a code{font-family:var(--font-mono);font-size:12px;color:var(--green);background:rgba(0,0,0,.3);padding:2px 7px;border-radius:6px}
+.b-list{margin-top:16px;display:flex;flex-direction:column;gap:8px}
+.b-list li{list-style:none;display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--muted)}
+.b-list li svg{width:15px;height:15px;color:var(--green);flex:none}
+/* ---------- principles ---------- */
+.principles{background:linear-gradient(180deg,transparent,rgba(10,12,29,.6) 18%,rgba(10,12,29,.6) 82%,transparent)}
+.pr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.pr-card{
+  position:relative;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);
+  padding:34px 30px;overflow:hidden;transition:border-color .3s,transform .3s;
+}
+.pr-card:hover{border-color:rgba(55,213,242,.4);transform:translateY(-3px)}
+.pr-card .num{
+  font-family:var(--font-display);font-size:15px;font-weight:700;letter-spacing:.2em;color:transparent;
+  -webkit-text-stroke:1px rgba(109,139,255,.55);margin-bottom:20px;
+}
+.pr-card h3{font-size:19px;font-weight:600;margin-bottom:10px}
+.pr-card p{color:var(--muted);font-size:14.5px}
+.pr-card::after{
+  content:"";position:absolute;top:0;left:0;right:0;height:1.5px;
+  background:linear-gradient(90deg,transparent,var(--indigo),var(--cyan),transparent);opacity:.6;
+}
+
+/* ---------- download ---------- */
+.dl-wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.dl-card{
+  border:1px solid var(--border);border-radius:var(--radius);background:var(--card);padding:32px;
+  display:flex;flex-direction:column;transition:border-color .3s,transform .3s;
+}
+.dl-card:hover{border-color:rgba(109,139,255,.4);transform:translateY(-3px)}
+.dl-os{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.dl-os .os-icon{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(140deg,rgba(109,139,255,.2),rgba(55,213,242,.1));border:1px solid rgba(109,139,255,.35);color:var(--indigo-2)}
+.dl-os .os-icon svg{width:23px;height:23px}
+.dl-os h3{font-size:18px;font-weight:600}
+.dl-os .ver{font-family:var(--font-mono);font-size:11.5px;color:var(--green)}
+.dl-meta{color:var(--muted);font-size:13.5px;margin-bottom:22px;display:flex;flex-direction:column;gap:6px}
+.dl-meta span{display:flex;align-items:center;gap:8px}
+.dl-meta svg{width:14px;height:14px;color:var(--muted-2)}
+.dl-btn{margin-top:auto}
+.code-block{
+  margin-top:auto;border:1px solid var(--border);border-radius:12px;background:rgba(3,4,10,.7);overflow:hidden;
+}
+.code-head{display:flex;align-items:center;justify-content:space-between;padding:8px 13px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:11px;color:var(--muted-2);letter-spacing:.06em}
+.copy-btn{display:inline-flex;align-items:center;gap:6px;background:none;border:1px solid var(--border);color:var(--muted);font-size:11.5px;font-family:var(--font-mono);padding:4px 10px;border-radius:7px;transition:.2s}
+.copy-btn:hover{color:var(--text);border-color:var(--indigo)}
+.copy-btn.copied{color:var(--green);border-color:rgba(52,211,153,.5)}
+.code-body{padding:13px 15px;font-family:var(--font-mono);font-size:12.5px;line-height:1.75;color:#aeb8e0;overflow-x:auto}
+.code-body .cm{color:var(--muted-2)}
+.code-body .kw{color:var(--cyan)}
+.code-body .hl{color:var(--green)}
+.dl-soon{display:flex;align-items:center;gap:9px;margin-top:16px;font-size:13px;color:var(--muted-2)}
+.dl-soon .tag{font-family:var(--font-mono);font-size:11px;border:1px dashed var(--border-strong);padding:2px 9px;border-radius:99px}
+
+/* ---------- cta ---------- */
+.cta{position:relative;text-align:center;padding:110px 0}
+.cta-box{
+  position:relative;border:1px solid var(--border-strong);border-radius:26px;padding:70px 30px;
+  background:radial-gradient(70% 100% at 50% 0%,rgba(109,139,255,.14),transparent 65%),linear-gradient(180deg,rgba(14,17,38,.9),rgba(7,9,20,.96));
+  overflow:hidden;
+}
+.cta-box::before{
+  content:"";position:absolute;top:-1px;left:20%;right:20%;height:1.5px;
+  background:linear-gradient(90deg,transparent,var(--indigo),var(--cyan),transparent);
+}
+.cta h2{font-family:var(--font-display);font-size:clamp(27px,3.4vw,38px);font-weight:700;margin-bottom:16px}
+.cta p{color:var(--muted);max-width:520px;margin:0 auto 32px;font-size:16px}
+.cta .btn{font-size:16px;padding:15px 32px;border-radius:14px}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--border);padding:56px 0 44px;background:rgba(7,8,18,.6)}
+.foot-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:40px;margin-bottom:44px}
+.foot-brand .logo{margin-bottom:14px}
+.foot-brand p{color:var(--muted);font-size:13.5px;max-width:260px}
+.foot-col h4{font-size:13px;color:var(--text);letter-spacing:.1em;margin-bottom:16px;font-weight:600}
+.foot-col a{display:block;color:var(--muted);font-size:13.5px;margin-bottom:11px;transition:color .2s}
+.foot-col a:hover{color:var(--indigo-2)}
+.foot-bottom{border-top:1px solid var(--border);padding-top:24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;color:var(--muted-2);font-size:12.5px}
+.foot-bottom .mono{font-family:var(--font-mono)}
+.foot-status{display:inline-flex;align-items:center;gap:7px;color:var(--muted)}
+.foot-status i{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
+
+/* ---------- reveal ---------- */
+.reveal{opacity:0;transform:translateY(26px);transition:opacity .7s cubic-bezier(.22,1,.36,1),transform .7s cubic-bezier(.22,1,.36,1)}
+.reveal.in{opacity:1;transform:none}
+
+/* ---------- responsive ---------- */
+@media (max-width:1024px){
+  .hero-grid{grid-template-columns:1fr;gap:70px}
+  .hero{padding:136px 0 70px}
+  .fb-2{left:-8px}
+  .bento{grid-template-columns:repeat(2,1fr)}
+  .foot-grid{grid-template-columns:1fr 1fr}
+}
+@media (max-width:768px){
+  .nav-links{display:none}
+  .nav-gh{display:none}
+  .nav-burger{display:grid}
+  section{padding:72px 0}
+  .bento{grid-template-columns:1fr}
+  .w2{grid-column:span 1}
+  .pr-grid{grid-template-columns:1fr}
+  .dl-wrap{grid-template-columns:1fr}
+  .hero-stats{width:100%;flex-direction:column}
+  .hstat{border-right:none;border-bottom:1px solid var(--border);display:flex;align-items:baseline;gap:10px}
+  .hstat:last-child{border-bottom:none}
+  .console{transform:none}
+  .foot-grid{grid-template-columns:1fr;gap:30px}
+}
+@media (max-width:480px){
+  .hero h1{font-size:34px}
+  .hero-btns .btn{width:100%}
+  .c-body{grid-template-columns:1fr}
+  .c-side{display:none}
+  .c-stats{grid-template-columns:1fr 1fr}
+  .c-stats .c-stat:last-child{grid-column:span 2}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+  html{scroll-behavior:auto}
+  .reveal{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+<div class="noise"></div>
+
+<nav id="nav">
+  <div class="container nav-inner">
+    <a href="/" class="logo" aria-label="ProberX 首页">
+      <span class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#6d8bff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17V7l7 6 7-6v10"/></svg>
+      </span>
+      <span>Prober<em>X</em></span>
+    </a>
+    <div class="nav-links">
+      <a href="#features">功能</a>
+      <a href="#principles">理念</a>
+      <a href="#download">下载</a>
+      <a href="/docs">文档</a>
+      <a href="/mcp">MCP</a>
+    </div>
+    <div class="nav-cta">
+      <a href="https://github.com/longdicode/ProberX" class="nav-gh" aria-label="GitHub 仓库" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.27-.01-1.17-.02-2.12-3.2.7-3.88-1.36-3.88-1.36-.52-1.33-1.28-1.68-1.28-1.68-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.03 1.75 2.69 1.25 3.34.95.1-.74.4-1.25.72-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.15 1.18a10.9 10.9 0 0 1 5.74 0c2.19-1.49 3.15-1.18 3.15-1.18.62 1.59.23 2.76.11 3.05.73.81 1.18 1.83 1.18 3.09 0 4.41-2.69 5.38-5.26 5.66.41.36.78 1.06.78 2.14 0 1.54-.01 2.79-.01 3.17 0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
+      </a>
+      <a href="https://agent.yqone.cn" class="btn btn-primary btn-sm">进入控制台</a>
+      <button class="nav-burger" id="burger" aria-label="打开菜单" aria-expanded="false">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </div>
+</nav>
+<div class="nav-mobile" id="navMobile">
+  <a href="#features">功能</a>
+  <a href="#principles">理念</a>
+  <a href="#download">下载</a>
+  <a href="/docs">文档</a>
+  <a href="/mcp">MCP</a>
+  <a href="https://agent.yqone.cn">进入控制台</a>
+</div>
+
+<main>
+  <!-- ================= HERO ================= -->
+  <section class="hero">
+    <div class="container hero-grid">
+      <div class="reveal in">
+        <div class="badge"><span class="dot"></span>开源 · 自托管 · AI 就绪</div>
+        <h1>把每一台服务器，<br>装进一个<span class="grad">控制台</span><span class="mono">PROBERX / MISSION CONTROL</span></h1>
+        <p class="hero-sub">ProberX 是一款<b>轻量、零侵入</b>的服务器监控与运维平台。一条命令安装 Agent，<b>Web 控制台 / 桌面端 / AI 终端</b>三端同步 —— 实时监控、WebSSH、Docker、文件管理、定时任务，开箱即用。</p>
+        <div class="hero-btns">
+          <a href="https://agent.yqone.cn" class="btn btn-primary">
+            立即开始
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+          <a href="#download" class="btn btn-ghost">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 21h16"/></svg>
+            下载桌面端
+          </a>
+        </div>
+        <div class="hero-stats">
+          <div class="hstat"><div class="num"><span>1</span><i>s</i></div><div class="lbl">秒级采集间隔</div></div>
+          <div class="hstat"><div class="num"><span class="count" data-target="18">0</span><i>+</i></div><div class="lbl">内置 MCP 工具</div></div>
+          <div class="hstat"><div class="num"><span class="count" data-target="3">0</span><i>端</i></div><div class="lbl">Web / 桌面 / Agent</div></div>
+        </div>
+      </div>
+
+      <div class="console-wrap reveal in" style="transition-delay:.15s">
+        <div class="console-glow"></div>
+        <div class="float-badge fb-1"><span style="color:var(--green)">●</span><b>42</b> 节点在线</div>
+        <div class="console">
+          <div class="c-titlebar">
+            <span class="c-dot r"></span><span class="c-dot y"></span><span class="c-dot g"></span>
+            <span class="c-path">proberx — agent.yqone.cn/overview</span>
+            <span class="c-live"><i></i>WSS 实时</span>
+          </div>
+          <div class="c-body">
+            <div class="c-side" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+              <svg class="active" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17l5-5-5-5"/><rect x="3" y="3" width="18" height="18" rx="4"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10l8-5 8 5v10M9 20v-6h6v6"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+            </div>
+            <div class="c-main">
+              <div class="c-stats">
+                <div class="c-stat cpu"><div class="k">CPU <b>4 核</b></div><div class="v" data-v="23%">--</div><div class="c-bar"><i data-w="23%"></i></div></div>
+                <div class="c-stat mem"><div class="k">MEMORY <b>8 GB</b></div><div class="v" data-v="61%">--</div><div class="c-bar"><i data-w="61%"></i></div></div>
+                <div class="c-stat net"><div class="k">NETWORK</div><div class="v" data-v="1.2 MB/s">--</div><div class="c-bar"><i data-w="42%"></i></div></div>
+              </div>
+              <div class="c-chart">
+                <div class="row"><span class="t">NETWORK TRAFFIC — 30 MIN</span><span class="l">▲ 2.4%</span></div>
+                <svg viewBox="0 0 300 66" preserveAspectRatio="none" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="cline" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0" stop-color="#6d8bff"/><stop offset="1" stop-color="#37d5f2"/>
+                    </linearGradient>
+                    <linearGradient id="cfill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0" stop-color="#6d8bff" stop-opacity=".28"/><stop offset="1" stop-color="#6d8bff" stop-opacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  <path class="chart-fill" d="M0 52 C18 48 30 56 48 50 S80 34 100 40 S130 52 150 44 S182 22 202 30 S232 44 252 34 S282 16 300 22 L300 66 L0 66 Z"/>
+                  <path class="chart-line" d="M0 52 C18 48 30 56 48 50 S80 34 100 40 S130 52 150 44 S182 22 202 30 S232 44 252 34 S282 16 300 22"/>
+                </svg>
+              </div>
+              <div class="c-procs" aria-hidden="true">
+                <div class="c-proc"><span class="pdot" style="background:var(--green)"></span><span class="nm">proberx-agent</span><span class="pid">pid 3811</span><span class="load">0.8%</span></div>
+                <div class="c-proc"><span class="pdot" style="background:var(--cyan)"></span><span class="nm">nginx</span><span class="pid">pid 2139</span><span class="load">2.1%</span></div>
+                <div class="c-proc"><span class="pdot" style="background:var(--amber)"></span><span class="nm">postgres</span><span class="pid">pid 1076</span><span class="load">5.4%</span></div>
+              </div>
+              <div class="c-term"><span class="pr">root@proberx:~$</span><span id="typed"></span><span class="cursor"></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="float-badge fb-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 12h4l3-8 4 16 3-8h4"/></svg>
+          吞吐 1.2 GB/s
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= MARQUEE ================= -->
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track" id="marqueeTrack">
+      <span>SSH</span><span>WEBSHELL</span><span>DOCKER</span><span>NGINX</span><span>REDIS</span><span>MYSQL</span><span>POSTGRESQL</span><span>CRON</span><span>FIREWALL</span><span>MCP</span><span>WEBHOOK</span><span>AI TERMINAL</span><span>FILE MANAGER</span><span>REAL-TIME METRICS</span>
+    </div>
+  </div>
+  <!-- ================= FEATURES ================= -->
+  <section id="features">
+    <div class="container">
+      <div class="sec-head reveal">
+        <div class="sec-eyebrow">Capabilities</div>
+        <h2>一个 Agent，覆盖全部运维场景</h2>
+        <p>从监控告警到终端操作，从容器编排到定时任务 —— 每个模块都开箱即用，无需在服务器上安装任何额外依赖。</p>
+      </div>
+
+      <div class="bento">
+        <div class="b-card w2 tilt reveal">
+          <div class="b-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-8"/></svg>
+          </div>
+          <h3>实时监控 <span class="tag">LIVE</span></h3>
+          <p>CPU、内存、磁盘、网络秒级采集，30 天历史曲线回溯；离线、超阈值第一时间触发告警。</p>
+          <div class="mini-spark">
+            <div class="ms-row">
+              <div class="ms-cell"><div class="k">CPU</div><div class="v up">23.4%</div></div>
+              <div class="ms-cell"><div class="k">内存</div><div class="v">61.2%</div></div>
+              <div class="ms-cell"><div class="k">磁盘</div><div class="v">48.7%</div></div>
+            </div>
+            <svg viewBox="0 0 300 40" preserveAspectRatio="none" style="width:100%;height:36px" aria-hidden="true">
+              <defs><linearGradient id="s1" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6d8bff"/><stop offset="1" stop-color="#37d5f2"/></linearGradient></defs>
+              <path d="M0 30 C20 26 36 32 56 24 S96 12 116 20 S150 32 170 24 S204 10 224 18 S258 30 278 20 S292 8 300 12" stroke="url(#s1)" stroke-width="2" fill="none" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="b-card w2 tilt reveal" style="transition-delay:.06s">
+          <div class="b-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17l9 5 9-5"/></svg>
+          </div>
+          <h3>AI 智能终端 <span class="tag">SHELL AI</span></h3>
+          <p>用自然语言描述目标，AI 生成并解释命令，确认后一键执行 —— 不懂命令也能安全运维。</p>
+          <div class="ai-bubble">
+            <div class="bub q">帮我看看磁盘空间，并清理 7 天前的日志</div>
+            <div class="bub a"><code>du -sh /* | sort -rh | head</code><br>已找到占用前三的目录，是否执行清理？</div>
+          </div>
+        </div>
+
+        <div class="b-card tilt reveal">
+          <div class="b-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="3"/><path d="M2.5 9h19M6 14h4M15.5 14h3"/></svg>
+          </div>
+          <h3>WebSSH 终端</h3>
+          <p>浏览器直连任意已装 Agent 的服务器，多标签会话、复制粘贴、全屏沉浸操作。</p>
+        </div>
+
+        <div class="b-card tilt reveal" style="transition-delay:.05s">
+          <div class="b-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10l8-5 8 5v10M9 20v-6h6v6"/></svg>
+          </div>
+          <h3>文件管理</h3>
+          <p>在线浏览目录、上传下载、编辑文本与配置文件，权限校验到位，操作全程留痕。</p>
+        </div>
+
+        <div class="b-card tilt reveal" style="transition-delay:.1s">
+          <div class="b-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17l5-5-5-5"/><rect x="3" y="3" width="18" height="18" rx="4"/></svg>
+          </div>
+          <h3>Docker 管理</h3>
+          <p>容器、镜像、日志、统计信息一屏掌握，启停、重建、清理一条龙可视化操作。</p>
+        </div>
+
+        <div class="b-card tilt reveal" style="transition-delay:.15s">
+          <div class="b-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+          </div>
+          <h3>定时任务</h3>
+          <p>可视化 Cron 编排：备份、清理、巡检自动执行；失败自动重试并推送告警，不再漏跑。</p>
+        </div>
+
+        <div class="b-card tilt reveal" style="transition-delay:.2s">
+          <div class="b-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M10.3 21a2 2 0 0 0 3.4 0"/></svg>
+          </div>
+          <h3>告警通知</h3>
+          <p>Telegram、邮件、Webhook 多渠道推送；按服务器、指标、级别细粒度配置，不错过任何故障。</p>
+        </div>
+
+        <div class="b-card w2 tilt reveal" style="transition-delay:.1s">
+          <div class="b-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="7" width="19" height="12" rx="3"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M2.5 12h19"/></svg>
+          </div>
+          <h3>MCP 生态</h3>
+          <p>内置 18+ MCP 工具，将服务器能力开放给 Claude Desktop、Codex 等 AI 助手 —— 让 AI 直接帮你巡检、排障、执行任务。</p>
+          <ul class="b-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>server · metrics · exec · docker · files · firewall · cron</li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5 5L20 6.5"/></svg>多工作区隔离，权限最小化设计</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+  <!-- ================= PRINCIPLES ================= -->
+  <section id="principles" class="principles">
+    <div class="container">
+      <div class="sec-head reveal">
+        <div class="sec-eyebrow">Philosophy</div>
+        <h2>人人可运维，事事可自动，处处可信任</h2>
+        <p>不追求重平台，只做三件事：让接入足够简单、让操作足够自动、让数据足够安全。</p>
+      </div>
+      <div class="pr-grid">
+        <div class="pr-card reveal">
+          <div class="num">01 / ZERO-INVASION</div>
+          <h3>零侵入接入</h3>
+          <p>单文件 Agent，一条命令安装，无需 Docker、无需额外运行时，秒级上线；卸载即恢复，不留任何痕迹。</p>
+        </div>
+        <div class="pr-card reveal" style="transition-delay:.08s">
+          <div class="num">02 / TRIPLE-SYNC</div>
+          <h3>三端实时同步</h3>
+          <p>Web 控制台、桌面客户端与 Agent 通过 WSS 实时互通，随时随地进入你的服务器，操作状态处处一致。</p>
+        </div>
+        <div class="pr-card reveal" style="transition-delay:.16s">
+          <div class="num">03 / SELF-HOSTED</div>
+          <h3>数据完全自托管</h3>
+          <p>所有监控与操作数据保存在你自己的数据库中，全开源代码可审计，绝不锁定、绝不上传你的数据。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= DOWNLOAD ================= -->
+  <section id="download">
+    <div class="container">
+      <div class="sec-head reveal">
+        <div class="sec-eyebrow">Download</div>
+        <h2>三端齐备，即刻出发</h2>
+        <p>桌面客户端享受更沉浸的监控体验；Agent 一条命令接入任意 Linux 服务器。</p>
+      </div>
+      <div class="dl-wrap">
+        <div class="dl-card reveal">
+          <div class="dl-os">
+            <div class="os-icon">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5L10 4.6v6.9H3V5.5zM3 18.5l7 .9v-6.9H3v6zM11 4.4l10-1.4v8.5H11V4.4zM11 20.9l10 1.4v-8.4H11v7z"/></svg>
+            </div>
+            <div><h3>桌面端 · Windows</h3><div class="ver">ProberX Setup 1.0.0</div></div>
+          </div>
+          <div class="dl-meta">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Windows 10 / 11 · x64</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>安装包 77.9 MB · 免依赖</span>
+          </div>
+          <a href="/downloads/ProberX_Setup_1.0.0.exe" class="btn btn-primary dl-btn" download>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 21h16"/></svg>
+            下载 Windows 客户端
+          </a>
+          <div class="dl-soon"><span class="tag">LINUX / MACOS</span>桌面端即将推出，先用 Web 控制台体验全部功能</div>
+        </div>
+
+        <div class="dl-card reveal" style="transition-delay:.08s">
+          <div class="dl-os">
+            <div class="os-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 9l-5 3 5 3M16 9l5 3-5 3M14 4l-4 16"/></svg>
+            </div>
+            <div><h3>Agent · Linux 服务器</h3><div class="ver">v1.0 · 单文件二进制</div></div>
+          </div>
+          <div class="dl-meta">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>支持 Ubuntu / Debian / CentOS 等主流发行版</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 2v20M2 12h20"/></svg>systemd 托管 · 自动注册 · 秒级心跳</span>
+          </div>
+          <div class="code-block">
+            <div class="code-head"><span>一键安装脚本</span><button class="copy-btn" id="copyAgent" aria-label="复制安装命令"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>复制</span></button></div>
+            <div class="code-body"><span class="cm"># 一键安装 ProberX Agent</span><br><span class="kw">curl</span> -fsSL https://panel.yqone.cn/downloads/install-agent.sh | <span class="kw">sudo</span> bash -s <span class="hl">http://agent.yqone.cn:4000</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CTA ================= -->
+  <section class="cta">
+    <div class="container">
+      <div class="cta-box reveal">
+        <h2>现在，让每一台服务器都在你掌心</h2>
+        <p>免费开源 · 一键部署 · 数据自托管。注册你的第一个工作区，30 秒接入第一台服务器。</p>
+        <a href="https://agent.yqone.cn" class="btn btn-primary">
+          进入 ProberX 控制台
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+    </div>
+  </section>
+</main>
+<footer>
+  <div class="container">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a href="/" class="logo">
+          <span class="logo-mark">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#6d8bff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17V7l7 6 7-6v10"/></svg>
+          </span>
+          <span>Prober<em>X</em></span>
+        </a>
+        <p>轻量、零侵入的服务器监控与运维平台。开源代码，数据自托管，三端同步。</p>
+      </div>
+      <div class="foot-col">
+        <h4>产品</h4>
+        <a href="#features">功能特性</a>
+        <a href="#download">桌面客户端</a>
+        <a href="/mcp">MCP 工具</a>
+        <a href="https://agent.yqone.cn">Web 控制台</a>
+      </div>
+      <div class="foot-col">
+        <h4>文档</h4>
+        <a href="/docs">快速开始</a>
+        <a href="/docs">Agent 安装</a>
+        <a href="/mcp">MCP 配置</a>
+        <a href="/docs">API 参考</a>
+      </div>
+      <div class="foot-col">
+        <h4>社区</h4>
+        <a href="https://github.com/longdicode/ProberX" target="_blank" rel="noopener">GitHub 仓库</a>
+        <a href="https://github.com/longdicode/ProberX/issues" target="_blank" rel="noopener">问题反馈</a>
+        <a href="https://github.com/longdicode/ProberX" target="_blank" rel="noopener">开源协议</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 ProberX · <span class="mono">MIT License</span></span>
+      <span><a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">津ICP备2025037833号</a></span>
+      <span class="foot-status"><i></i>所有系统运行正常</span>
+      <span>Built with <span class="mono">Agent + WebSocket</span></span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  var nav = document.getElementById("nav");
+  function onScroll(){ nav.classList.toggle("scrolled", window.scrollY > 12); }
+  window.addEventListener("scroll", onScroll, {passive:true}); onScroll();
+
+  var burger = document.getElementById("burger");
+  var mobile = document.getElementById("navMobile");
+  burger.addEventListener("click", function(){
+    var open = mobile.classList.toggle("open");
+    burger.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+  mobile.querySelectorAll("a").forEach(function(a){
+    a.addEventListener("click", function(){ mobile.classList.remove("open"); burger.setAttribute("aria-expanded","false"); });
+  });
+
+  var track = document.getElementById("marqueeTrack");
+  track.innerHTML += track.innerHTML;
+
+  window.addEventListener("load", function(){
+    document.querySelectorAll(".c-stat .v").forEach(function(el){
+      el.textContent = el.getAttribute("data-v");
+    });
+    document.querySelectorAll(".c-bar i").forEach(function(el){
+      el.style.width = el.getAttribute("data-w");
+    });
+  });
+
+  var cmds = [
+    "proberx agent online · 42 nodes monitored",
+    "systemctl status proberx-agent — active (running)",
+    "docker ps — 12 containers healthy",
+    "cron backup #daily — completed in 3.2s"
+  ];
+  var typed = document.getElementById("typed");
+  var ci = 0, cj = 0, deleting = false;
+  function tick(){
+    var cur = cmds[ci];
+    if (!deleting){
+      cj++;
+      typed.textContent = cur.slice(0, cj);
+      if (cj >= cur.length){ deleting = true; setTimeout(tick, 1900); return; }
+      setTimeout(tick, 42);
+    } else {
+      cj -= 2;
+      typed.textContent = cur.slice(0, Math.max(0, cj));
+      if (cj <= 0){ deleting = false; ci = (ci + 1) % cmds.length; setTimeout(tick, 500); return; }
+      setTimeout(tick, 16);
+    }
+  }
+  setTimeout(tick, 2400);
+
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (e.isIntersecting){ e.target.classList.add("in"); io.unobserve(e.target); }
+    });
+  }, {threshold:.12});
+  document.querySelectorAll(".reveal").forEach(function(el){ io.observe(el); });
+
+  var cio = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (!e.isIntersecting) return;
+      var el = e.target, target = parseInt(el.dataset.target, 10), t0 = null;
+      function step(ts){
+        if (!t0) t0 = ts;
+        var p = Math.min((ts - t0) / 1100, 1);
+        el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3)));
+        if (p < 1) requestAnimationFrame(step);
+        else el.textContent = target;
+      }
+      requestAnimationFrame(step);
+      cio.unobserve(el);
+    });
+  }, {threshold:.6});
+  document.querySelectorAll(".count").forEach(function(el){ cio.observe(el); });
+
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!reduced){
+    document.querySelectorAll(".tilt").forEach(function(card){
+      card.addEventListener("mousemove", function(ev){
+        var r = card.getBoundingClientRect();
+        var x = (ev.clientX - r.left) / r.width - .5;
+        var y = (ev.clientY - r.top) / r.height - .5;
+        card.style.transform = "translateY(-3px) perspective(900px) rotateX(" + (-y*4).toFixed(2) + "deg) rotateY(" + (x*4).toFixed(2) + "deg)";
+      });
+      card.addEventListener("mouseleave", function(){
+        card.style.transform = "";
+      });
+    });
+  }
+
+  var copyBtn = document.getElementById("copyAgent");
+  if (copyBtn){
+    copyBtn.addEventListener("click", function(){
+      var text = "curl -fsSL https://panel.yqone.cn/downloads/install-agent.sh | sudo bash -s http://agent.yqone.cn:4000";
+      function done(){
+        copyBtn.classList.add("copied");
+        copyBtn.querySelector("span").textContent = "已复制";
+        setTimeout(function(){
+          copyBtn.classList.remove("copied");
+          copyBtn.querySelector("span").textContent = "复制";
+        }, 2000);
+      }
+      function fallback(){
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); done(); } catch(e){}
+        document.body.removeChild(ta);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(done, function(){ fallback(); });
+      } else { fallback(); }
+    });
+  }
+})();
+</script>
+</body>
+</html>

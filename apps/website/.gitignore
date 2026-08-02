@@ -1,0 +1,6 @@
+data/
+downloads/proberx-agent-linux-amd64*
+index.html.bak*
+.htaccess
+.well-known/
+*.bak-icp
