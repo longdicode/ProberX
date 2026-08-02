@@ -18,5 +18,5 @@ export async function getContainers(workspaceId: string, serverId: string, db: D
   });
   if (!res.ok) throw AppError.badRequest(`Agent returned status ${res.status}`);
 
-  return res.json(); (fix: agent auth headers, MCP route reply check, process-list auto-load, auth store localStorage fallback, docker.service return fix)
+  return res.json();
 }

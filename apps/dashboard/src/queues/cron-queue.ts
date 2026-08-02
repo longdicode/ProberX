@@ -1,4 +1,4 @@
-import { Queue } from "bullmq";
+﻿import { Queue } from "bullmq";
 import { connection } from "./connection";
 
 export interface CronExecJob {
@@ -8,6 +8,7 @@ export interface CronExecJob {
   host: string;
   port: number;
   command: string;
+  serverSecret?: string;
 }
 
 export const cronExecQueue = new Queue<CronExecJob>("cron-execution", {

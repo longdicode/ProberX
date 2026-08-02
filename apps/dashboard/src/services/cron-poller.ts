@@ -1,4 +1,4 @@
-import { CronExpressionParser } from "cron-parser";
+﻿import { CronExpressionParser } from "cron-parser";
 import { eq, and, isNotNull } from "drizzle-orm";
 import { cronJobs } from "../db/schema/cron-jobs";
 import { cronExecutions } from "../db/schema/cron-executions";
@@ -34,6 +34,7 @@ export function startCronPoller(db: DbClient, intervalSec = 60) {
           .select({
             id: servers.id,
             hostInfo: servers.hostInfo,
+            agentSecret: servers.agentSecret,
           })
           .from(servers)
           .where(
@@ -71,12 +72,16 @@ export function startCronPoller(db: DbClient, intervalSec = 60) {
               host,
               port,
               command: job.command,
+              serverSecret: server.agentSecret,
             });
           } else {
             try {
+              const headers: Record<string, string> = { "Content-Type": "application/json" };
+              if (server.agentSecret) headers.Authorization = `Bearer ${server.agentSecret}`;
+
               const res = await fetch(`http://${host}:${port}/exec`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers,
                 body: JSON.stringify({ command: job.command, timeout_sec: 30 }),
                 signal: AbortSignal.timeout(35000),
               });
