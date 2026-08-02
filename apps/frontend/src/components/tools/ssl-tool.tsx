@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,17 @@ export default function SSLTool({ t, endpoint, meta, router, serverId, servers }
   const [issueResult, setIssueResult] = useState<any>(null);
   const [issueLoading, setIssueLoading] = useState(false);
   const [renewLoading, setRenewLoading] = useState(false);
+  const [installed, setInstalled] = useState<any[]>([]);
+  const [installedLoading, setInstalledLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setInstalled((await api.get<any[]>(endpoint("/tools/ssl/certs"))) || []);
+      } catch { /* ignore */ }
+      finally { setInstalledLoading(false); }
+    })();
+  }, [endpoint]);
 
   async function check() {
     if (!domain) return;
@@ -60,6 +71,41 @@ export default function SSLTool({ t, endpoint, meta, router, serverId, servers }
   return (
     <div className="space-y-6">
       <ToolHeader meta={meta} router={router} t={t} serverId={serverId} servers={servers} />
+
+      {/* Installed certificates (BT Panel / certbot) */}
+      <Card>
+        <CardHeader><CardTitle className="text-sm">{t("tools.installedCerts")}</CardTitle></CardHeader>
+        <CardContent>
+          {installedLoading ? (
+            <p className="text-sm text-muted-foreground">{t("tools.checking")}</p>
+          ) : installed.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("tools.noInstalledCerts")}</p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {installed.map((cert) => (
+                <div key={cert.cert_path} className="rounded-lg border p-3 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium truncate">{cert.domain}</span>
+                    <Badge variant={cert.days_left < 30 ? "destructive" : cert.days_left < 60 ? "secondary" : "default"}>
+                      {cert.days_left}{t("tools.daysSuffix")}
+                    </Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {cert.issuer} · {new Date(cert.not_after).toLocaleDateString()}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="outline" className="text-[10px]">
+                      {cert.source === "bt" ? t("tools.certSourceBt") : t("tools.certSourceCertbot")}
+                    </Badge>
+                    <span className="text-[10px] text-muted-foreground font-mono truncate">{cert.cert_path}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="flex gap-3 max-w-lg">
         <Input placeholder={t("tools.domainPlaceholder")} value={domain}
           onChange={(e) => setDomain(e.target.value)} onKeyDown={(e) => e.key === "Enter" && check()} />
