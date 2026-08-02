@@ -91,7 +91,7 @@ export default function ShellAITool({ t, endpoint, meta, router, serverId, serve
     };
   }, [provider, model, apiKey, apiUrl, configLoaded, saveConfig]);
 
-  const handleProviderChange = (v: string) => { (fix: agent auth headers, MCP route reply check, process-list auto-load, auth store localStorage fallback, docker.service return fix)
+  const handleProviderChange = (v: string | null) => {
     if (!v) return;
     setProvider(v);
     setModel(providerDefaults[v]?.model || "");

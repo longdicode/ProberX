@@ -229,8 +229,8 @@ type CreateDNSRecordRequest struct {
 
 // ShellAIConfig holds the AI provider settings for Shell AI tool.
 type ShellAIConfig struct {
-	Provider string json:"provider"
-	Model    string json:"model"
-	APIKey   string json:"api_key"
-	APIURL   string json:"api_url"
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	APIKey   string `json:"api_key"`
+	APIURL   string `json:"api_url"`
 }
