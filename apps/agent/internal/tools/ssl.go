@@ -1,11 +1,14 @@
-package tools
+﻿package tools
 
 import (
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -106,3 +109,84 @@ func RenewCert(domain string) (*SSLRenewResult, error) {
 	return &SSLRenewResult{Success: true, Domain: domain, Output: string(output)}, nil
 }
 
+// ListInstalledCerts scans common certificate locations (BT Panel, certbot)
+// and returns certificates already installed on this machine.
+func ListInstalledCerts() []InstalledCertInfo {
+	var result []InstalledCertInfo
+	seen := map[string]bool{}
+
+	// BT Panel (宝塔面板): /www/server/panel/vhost/cert/<domain>/{fullchain.pem,privkey.pem}
+	if dirs, err := os.ReadDir("/www/server/panel/vhost/cert"); err == nil {
+		for _, d := range dirs {
+			if !d.IsDir() {
+				continue
+			}
+			base := filepath.Join("/www/server/panel/vhost/cert", d.Name())
+			certPath := filepath.Join(base, "fullchain.pem")
+			keyPath := filepath.Join(base, "privkey.pem")
+			if info := parseInstalledCert(certPath, keyPath, "bt"); info != nil {
+				result = append(result, *info)
+				seen[info.Domain] = true
+			}
+		}
+	}
+
+	// certbot: /etc/letsencrypt/live/<domain>/fullchain.pem
+	if dirs, err := os.ReadDir("/etc/letsencrypt/live"); err == nil {
+		for _, d := range dirs {
+			if !d.IsDir() {
+				continue
+			}
+			base := filepath.Join("/etc/letsencrypt/live", d.Name())
+			certPath := filepath.Join(base, "fullchain.pem")
+			if _, err := os.Stat(certPath); err != nil {
+				continue
+			}
+			keyPath := filepath.Join(base, "privkey.pem")
+			if info := parseInstalledCert(certPath, keyPath, "certbot"); info != nil && !seen[info.Domain] {
+				result = append(result, *info)
+				seen[info.Domain] = true
+			}
+		}
+	}
+
+	return result
+}
+
+// parseInstalledCert reads a PEM certificate file and returns its details.
+func parseInstalledCert(certPath, keyPath, source string) *InstalledCertInfo {
+	data, err := os.ReadFile(certPath)
+	if err != nil {
+		return nil
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil
+	}
+	now := time.Now()
+	daysLeft := int(cert.NotAfter.Sub(now).Hours() / 24)
+	domain := cert.Subject.CommonName
+	if domain == "" && len(cert.DNSNames) > 0 {
+		domain = cert.DNSNames[0]
+	}
+	keyFile := keyPath
+	if _, err := os.Stat(keyFile); err != nil {
+		keyFile = ""
+	}
+	return &InstalledCertInfo{
+		Domain:    domain,
+		Issuer:    cert.Issuer.CommonName,
+		Subject:   cert.Subject.CommonName,
+		NotBefore: cert.NotBefore.Format(time.RFC3339),
+		NotAfter:  cert.NotAfter.Format(time.RFC3339),
+		DaysLeft:  daysLeft,
+		SANs:      strings.Join(cert.DNSNames, ", "),
+		CertPath:  certPath,
+		KeyPath:   keyFile,
+		Source:    source,
+	}
+}

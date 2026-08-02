@@ -37,6 +37,7 @@ func ListDatabases() ([]DatabaseInfo, error) {
 	}
 
 	var result []DatabaseInfo
+	seen := make(map[string]bool)
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -82,6 +83,7 @@ func ListDatabases() ([]DatabaseInfo, error) {
 		cancel3()
 		ver = strings.TrimSpace(string(out3))
 
+		seen[name] = true
 		result = append(result, DatabaseInfo{
 			Name:      name,
 			Type:      dbType,
@@ -92,7 +94,91 @@ func ListDatabases() ([]DatabaseInfo, error) {
 		})
 	}
 
+	// Also detect existing database containers running on the host
+	// (installed outside ProberX, e.g. via docker compose or system packages).
+	result = append(result, detectDockerDatabases(seen)...)
+
 	return result, nil
+}
+
+// detectDockerDatabases scans `docker ps -a` for containers running known
+// database images and returns them as DatabaseInfo entries.
+func detectDockerDatabases(seen map[string]bool) []DatabaseInfo {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "docker", "ps", "-a", "--format", "{{.Names}}\t{{.Image}}\t{{.Status}}").CombinedOutput()
+	if err != nil {
+		return nil
+	}
+
+	var result []DatabaseInfo
+	for _, line := range strings.Split(string(out), "\n") {
+		parts := strings.SplitN(strings.TrimSpace(line), "\t", 3)
+		if len(parts) < 3 {
+			continue
+		}
+		name, image, status := parts[0], parts[1], parts[2]
+		dbType := databaseImageType(image)
+		if dbType == "" || seen[name] {
+			continue
+		}
+
+		state := "unknown"
+		switch {
+		case strings.HasPrefix(status, "Up"):
+			state = "running"
+		case strings.HasPrefix(status, "Exited"):
+			state = "exited"
+		case strings.HasPrefix(status, "Restarting"):
+			state = "restarting"
+		case strings.HasPrefix(status, "Paused"):
+			state = "paused"
+		}
+
+		result = append(result, DatabaseInfo{
+			Name:      name,
+			Type:      dbType,
+			Version:   image,
+			Port:      containerPort(name),
+			Status:    state,
+			Container: name,
+		})
+	}
+	return result
+}
+
+// databaseImageType infers the database type from a container image name.
+func databaseImageType(image string) string {
+	img := strings.ToLower(image)
+	switch {
+	case strings.Contains(img, "mariadb"), strings.Contains(img, "mysql"):
+		return "mysql"
+	case strings.Contains(img, "timescaledb"), strings.Contains(img, "postgres"):
+		return "postgresql"
+	case strings.Contains(img, "redis"):
+		return "redis"
+	case strings.Contains(img, "mongo"):
+		return "mongodb"
+	}
+	return ""
+}
+
+// containerPort returns the host port published by a container.
+func containerPort(name string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "docker", "port", name).CombinedOutput()
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.Contains(line, ":") {
+			parts := strings.Split(line, ":")
+			return parts[len(parts)-1]
+		}
+	}
+	return ""
 }
 
 // InstallDatabase deploys a database via Docker.

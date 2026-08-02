@@ -21,6 +21,21 @@ type SSLCertInfo struct {
 	Fingerprint string `json:"fingerprint"`
 }
 
+
+// InstalledCertInfo holds details of a certificate installed on this machine.
+type InstalledCertInfo struct {
+	Domain    string `json:"domain"`
+	Issuer    string `json:"issuer"`
+	Subject   string `json:"subject"`
+	NotBefore string `json:"not_before"`
+	NotAfter  string `json:"not_after"`
+	DaysLeft  int    `json:"days_left"`
+	SANs      string `json:"sans"`
+	CertPath  string `json:"cert_path"`
+	KeyPath   string `json:"key_path,omitempty"`
+	Source    string `json:"source"`
+}
+
 // LogEntry represents a single log line.
 type LogEntry struct {
 	Timestamp string `json:"timestamp"`

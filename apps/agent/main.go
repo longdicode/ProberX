@@ -63,6 +63,7 @@ func main() {
 	mux.HandleFunc("POST /tools/services", h.WithAuth(h.HandleToolsServicesControl))
 	mux.HandleFunc("GET /tools/services/{name}", h.WithAuth(h.HandleToolsServicesStatus))
 	mux.HandleFunc("POST /tools/ssl", h.WithAuth(h.HandleToolsSSLCheck))
+	mux.HandleFunc("GET /tools/ssl/certs", h.WithAuth(h.HandleToolsSSLCerts))
 	mux.HandleFunc("POST /tools/ssl/issue", h.WithAuth(h.HandleToolsSSLIssue))
 	mux.HandleFunc("POST /tools/ssl/renew", h.WithAuth(h.HandleToolsSSLRenew))
 	mux.HandleFunc("GET /tools/logs", h.WithAuth(h.HandleToolsLogsFetch))

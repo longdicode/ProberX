@@ -479,6 +479,16 @@ func (c *Config) HandleToolsSSLRenew(w http.ResponseWriter, r *http.Request) {
 	tools.WriteOK(w, result)
 }
 
+// HandleToolsSSLCerts lists SSL certificates installed on this machine
+// (BT Panel / certbot managed certificates).
+func (c *Config) HandleToolsSSLCerts(w http.ResponseWriter, r *http.Request) {
+	certs := tools.ListInstalledCerts()
+	if certs == nil {
+		certs = []tools.InstalledCertInfo{}
+	}
+	tools.WriteOK(w, certs)
+}
+
 // --- Tools: Logs ---
 
 // HandleToolsLogsFetch fetches system logs via journalctl.
