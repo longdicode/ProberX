@@ -8,6 +8,7 @@ import * as metricsService from "../services/metrics.service";
 import * as dockerService from "../services/docker.service";
 import * as fileopsService from "../services/fileops.service";
 import * as firewallService from "../services/firewall.service";
+import * as agentUpgradeService from "../services/agent-upgrade.service";
 import { fileListQuery, fileReadQuery, fileDeleteBody, fileMkdirBody, fileRenameBody, fileWriteBody } from "../validators/fileops";
 
 const runProbeBody = z.object({
@@ -209,5 +210,11 @@ export const serverRoutes: FastifyPluginAsync = async (app) => {
     const { wid, id } = req.params as { wid: string; id: string };
     const { chain, num } = req.body as { chain: string; num: string };
     return reply.send(await firewallService.deleteRule(wid, id, { chain, num }, app.db));
+  });
+
+  app.post("/workspaces/:wid/servers/:id/agent/upgrade", { preHandler: [app.authenticate, app.guardWorkspace()] }, async (req, reply) => {
+    const { wid, id } = req.params as { wid: string; id: string };
+    const body = (req.body as { url?: string }) || {};
+    return reply.send(await agentUpgradeService.upgradeAgent(wid, id, body, app.db));
   });
 };

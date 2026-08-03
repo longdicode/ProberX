@@ -83,6 +83,22 @@ func (c *Config) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// HandleUpgrade triggers a self-upgrade of the agent binary.
+func (c *Config) HandleUpgrade(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		URL string `json:"url"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+	}
+	result, err := upgrade.Upgrade(body.URL)
+	if err != nil {
+		tools.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	tools.WriteOK(w, result)
+}
+
 // HandleMetrics collects and returns system metrics.
 func (c *Config) HandleMetrics(w http.ResponseWriter, r *http.Request) {
 	snap, err := metrics.Collect()
