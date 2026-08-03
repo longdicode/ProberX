@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { ClipboardCopy, ClipboardPaste } from "lucide-react";
 import { terminalWsClient } from "@/lib/terminal-ws";
 import { getToken } from "@/lib/auth";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -49,10 +50,28 @@ export function TerminalComponent({ serverId, onStateChange }: TerminalComponent
     const term = new Terminal({
       cursorBlink: true,
       fontSize: 14,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      fontFamily: '"Cascadia Code", Consolas, "Courier New", Menlo, Monaco, monospace',
       theme,
       scrollback: 5000,
       tabStopWidth: 4,
+      rightClickSelectsWord: true,
+      allowProposedApi: true,
+    });
+
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type !== "keydown") return true;
+      if (e.ctrlKey && e.shiftKey && e.code === "KeyC") {
+        const sel = term.getSelection();
+        if (sel) {
+          navigator.clipboard?.writeText(sel).catch(() => {});
+        }
+        return false;
+      }
+      if (e.ctrlKey && e.shiftKey && e.code === "KeyV") {
+        navigator.clipboard?.readText().then((txt) => term.paste(txt)).catch(() => {});
+        return false;
+      }
+      return true;
     });
 
     const fitAddon = new FitAddon();
@@ -61,6 +80,16 @@ export function TerminalComponent({ serverId, onStateChange }: TerminalComponent
     term.loadAddon(webLinksAddon);
     term.open(containerRef.current);
     fitAddon.fit();
+
+    // Re-measure once fonts are ready so selection aligns with rendered glyphs
+    if (typeof document !== "undefined" && document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        if (!termRef.current) return;
+        fitAddon.fit();
+        const dims = fitAddon.proposeDimensions();
+        if (dims) terminalWsClient.sendResize(dims.cols, dims.rows);
+      }).catch(() => {});
+    }
 
     termRef.current = term;
     fitAddonRef.current = fitAddon;
@@ -128,11 +157,61 @@ export function TerminalComponent({ serverId, onStateChange }: TerminalComponent
     };
   }, [serverId, current?.id]);
 
+  const copySelection = async () => {
+    const term = termRef.current;
+    if (!term) return;
+    const sel = term.getSelection();
+    if (!sel) return;
+    try {
+      await navigator.clipboard.writeText(sel);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+
+  const pasteClipboard = async () => {
+    const term = termRef.current;
+    if (!term) return;
+    try {
+      const txt = await navigator.clipboard.readText();
+      if (txt) term.paste(txt);
+    } catch {
+      /* clipboard permission denied */
+    }
+  };
+
   return (
-    <div
-      ref={containerRef}
-      className="w-full h-[500px] rounded-b-lg overflow-hidden border-x border-b border-border/50"
-      style={{ backgroundColor: theme.background }}
-    />
+    <div className="overflow-hidden rounded-lg border border-border/50">
+      <div
+        className="flex items-center justify-end gap-1 border-b border-white/10 px-2 py-1"
+        style={{ backgroundColor: "#15161e" }}
+      >
+        <button
+          type="button"
+          onClick={copySelection}
+          title="复制选中内容 (Ctrl+Shift+C)"
+          aria-label="复制选中内容"
+          className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          <ClipboardCopy className="size-3" />
+          复制
+        </button>
+        <button
+          type="button"
+          onClick={pasteClipboard}
+          title="粘贴剪贴板内容 (Ctrl+Shift+V)"
+          aria-label="粘贴剪贴板内容"
+          className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          <ClipboardPaste className="size-3" />
+          粘贴
+        </button>
+      </div>
+      <div
+        ref={containerRef}
+        className="h-[500px] overflow-hidden"
+        style={{ backgroundColor: theme.background }}
+      />
+    </div>
   );
 }
