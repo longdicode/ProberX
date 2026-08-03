@@ -26,7 +26,9 @@ import { useLocale } from "@/stores/locale-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useServerDetail } from "@/hooks/use-server-detail";
-import { ArrowLeft, Server, Wifi, WifiOff, Terminal, Pencil, Trash2, Play, Pause, Rewind, FastForward } from "lucide-react";
+import { ArrowLeft, Server, Wifi, WifiOff, Terminal, Pencil, Trash2, Play, Pause, Rewind, FastForward, RefreshCw } from "lucide-react";
+import { api } from "@/lib/api-client";
+import { toast } from "sonner";
 
 export default function ServerDetailPage() {
   const params = useParams();
@@ -68,6 +70,22 @@ export default function ServerDetailPage() {
 
   const { state: wsState } = useWebSocket();
   const [terminalState, setTerminalState] = useState<string>("disconnected");
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgrading, setUpgrading] = useState(false);
+
+  async function handleUpgradeAgent() {
+    if (!wid || !sid || upgrading) return;
+    setUpgrading(true);
+    try {
+      await api.post(`/workspaces/${wid}/servers/${sid}/agent/upgrade`, {});
+      toast.success("Agent 更新成功，正在重启，请稍候…");
+      setUpgradeOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Agent 更新失败");
+    } finally {
+      setUpgrading(false);
+    }
+  }
 
   if (!current || serverLoading) return <LoadingSkeleton />;
   if (serverError || !server) {
@@ -96,6 +114,17 @@ export default function ServerDetailPage() {
             <button onClick={() => setDeleteTarget({ id: sid, name: server.name })} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors" title={t("servers.deleteServer")}>
               <Trash2 className="w-3.5 h-3.5" />
             </button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-2 h-7 px-2.5 text-xs"
+              disabled={!isOnline || upgrading}
+              onClick={() => setUpgradeOpen(true)}
+              title="更新 Agent"
+            >
+              <RefreshCw className={upgrading ? "w-3.5 h-3.5 animate-spin" : "w-3.5 h-3.5"} />
+              更新 Agent
+            </Button>
             <div className="flex items-center gap-1.5 ml-2 text-xs text-muted-foreground">
               {wsState === "connected" ? <Wifi className="w-3 h-3 text-green-500" /> : <WifiOff className="w-3 h-3" />}
               <span className="sr-only">{wsState}</span>
@@ -245,6 +274,15 @@ export default function ServerDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={upgradeOpen}
+        onOpenChange={setUpgradeOpen}
+        title="更新 Agent"
+        description="将从面板下载最新 Agent 并替换重启，期间该服务器会短暂离线（约 10-30 秒）。确定继续吗？"
+        confirmLabel="立即更新"
+        onConfirm={handleUpgradeAgent}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

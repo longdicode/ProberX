@@ -124,6 +124,8 @@ func main() {
 	mux.HandleFunc("PUT /tools/dns/records/{id}", h.WithAuth(h.HandleToolsDNSRecordUpdate))
 	mux.HandleFunc("DELETE /tools/dns/records/{id}", h.WithAuth(h.HandleToolsDNSRecordDelete))
 
+	mux.HandleFunc("POST /upgrade", h.WithAuth(h.HandleUpgrade))
+
 	// Start HTTP server
 	srv := &http.Server{Addr: ":" + port, Handler: handlers.WithLogging(mux)}
 

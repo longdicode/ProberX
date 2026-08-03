@@ -234,3 +234,62 @@ func partAt(parts []string, i int) int {
 	n, _ := strconv.Atoi(parts[i])
 	return n
 }
+
+// DefaultDownloadURL returns the default binary download URL for this platform.
+// Can be overridden with the UPGRADE_URL environment variable.
+func DefaultDownloadURL() string {
+	if u := os.Getenv("UPGRADE_URL"); u != "" {
+		return u
+	}
+	return fmt.Sprintf("https://panel.yqone.cn/downloads/proberx-agent-%s-%s", runtime.GOOS, runtime.GOARCH)
+}
+
+// Upgrade downloads a new agent binary and replaces the running executable.
+// customURL overrides the download source; empty uses DefaultDownloadURL.
+// The process restart is scheduled asynchronously so the HTTP response
+// can be delivered before the service restarts.
+func Upgrade(customURL string) (map[string]string, error) {
+	if runtime.GOOS == "windows" {
+		return nil, fmt.Errorf("agent upgrade is not supported on Windows yet")
+	}
+
+	downloadURL := customURL
+	if downloadURL == "" {
+		downloadURL = DefaultDownloadURL()
+	}
+
+	exePath, err := os.Executable()
+	if err != nil {
+		return nil, fmt.Errorf("os.Executable: %w", err)
+	}
+	tmpFile := filepath.Join(filepath.Dir(exePath), ".agent_upgrade")
+
+	log.Printf("[upgrade] downloading %s", downloadURL)
+	if err := downloadTo(downloadURL, tmpFile); err != nil {
+		os.Remove(tmpFile)
+		return nil, fmt.Errorf("download: %w", err)
+	}
+	if err := os.Chmod(tmpFile, 0755); err != nil {
+		os.Remove(tmpFile)
+		return nil, fmt.Errorf("chmod: %w", err)
+	}
+	if err := os.Rename(tmpFile, exePath); err != nil {
+		os.Remove(tmpFile)
+		return nil, fmt.Errorf("replace binary: %w", err)
+	}
+
+	log.Println("[upgrade] binary replaced, restarting service...")
+
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		cmd := exec.Command("systemctl", "restart", "proberx-agent")
+		_ = cmd.Start()
+	}()
+
+	return map[string]string{
+		"status":     "upgraded",
+		"version":    Version,
+		"url":        downloadURL,
+		"restarting": "true",
+	}, nil
+}
