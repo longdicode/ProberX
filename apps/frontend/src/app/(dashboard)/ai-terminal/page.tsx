@@ -88,6 +88,15 @@ const SUGGESTIONS: { icon: LucideIcon; label: string; prompt: string }[] = [
   { icon: Info, label: "系统信息", prompt: "show system info (os, kernel, uptime)" },
 ];
 
+const CMD_SUGGESTIONS = [
+  "df -h",
+  "free -m",
+  "uptime",
+  "docker ps",
+  "systemctl status nginx",
+  "top -bn1 | head -20",
+];
+
 function formatTime(ts: number) {
   return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
@@ -102,6 +111,7 @@ export default function AiTerminalPage() {
   const { data: servers } = useServers(current?.id);
   const [selectedServer, setSelectedServer] = useState("");
   const [input, setInput] = useState("");
+  const [mode, setMode] = useState<"ai" | "cmd">("ai");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [cfgProvider, setCfgProvider] = useState("openai");
@@ -167,6 +177,12 @@ export default function AiTerminalPage() {
     setInput("");
     setLoading(true);
     inputRef.current?.focus();
+
+    // 命令模式：直接执行输入的命令
+    if (mode === "cmd") {
+      await runCommand(content.replace(/^\$+\s*/, ""));
+      return;
+    }
 
     const userMsg: Message = { id: genId(), role: "user", content, timestamp: Date.now() };
     setMessages((prev) => [...prev, userMsg]);
@@ -236,6 +252,48 @@ export default function AiTerminalPage() {
           timestamp: Date.now(),
         },
       ]);
+    }
+  }
+
+  async function runCommand(cmd: string) {
+    const startedAt = Date.now();
+    const cmdMsg: Message = {
+      id: genId(),
+      role: "command",
+      content: "Executing...",
+      command: cmd,
+      timestamp: Date.now(),
+    };
+    setMessages((prev) => [...prev, cmdMsg]);
+    try {
+      const exec = await api.post<{ stdout: string; stderr: string; exit_code: number }>(
+        endpoint("/tools/shell-ai/execute"),
+        { command: cmd, timeout: 30 }
+      );
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === cmdMsg.id
+            ? {
+                ...m,
+                content: exec.stdout || exec.stderr || "(empty)",
+                output: exec.stdout || exec.stderr,
+                exitCode: exec.exit_code,
+                durationMs: Date.now() - startedAt,
+              }
+            : m
+        )
+      );
+    } catch (e) {
+      const raw = e instanceof Error ? e.message : "Execution failed";
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === cmdMsg.id
+            ? { ...m, content: raw, output: raw, exitCode: -1, durationMs: Date.now() - startedAt }
+            : m
+        )
+      );
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -325,6 +383,7 @@ export default function AiTerminalPage() {
             </SelectContent>
           </Select>
 
+          {mode === "ai" && (
           <Select value={cfgProvider} onValueChange={handleCfgProviderChange}>
             <SelectTrigger size="sm" className="w-28">
               <span className={cn("size-2 shrink-0 rounded-full", activeProvider.dot)} />
@@ -341,7 +400,9 @@ export default function AiTerminalPage() {
               ))}
             </SelectContent>
           </Select>
+          )}
 
+          {mode === "ai" && (
           <Button
             variant="ghost"
             size="icon-sm"
@@ -351,6 +412,7 @@ export default function AiTerminalPage() {
           >
             <Settings2 className="size-4" />
           </Button>
+          )}
           <Button variant="ghost" size="icon-sm" onClick={clearChat} title="清空对话" aria-label="清空对话">
             <Trash2 className="size-4" />
           </Button>
@@ -361,7 +423,7 @@ export default function AiTerminalPage() {
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         <div className="mx-auto flex max-w-3xl flex-col gap-5">
           {messages.length === 0 ? (
-            <EmptyState onPick={(p) => handleSend(p)} online={onlineServers.length > 0} />
+            <EmptyState mode={mode} onPick={(p) => handleSend(p)} online={onlineServers.length > 0} />
           ) : (
             messages.map((msg) => <MessageBubble key={msg.id} msg={msg} />)
           )}
@@ -383,6 +445,30 @@ export default function AiTerminalPage() {
               "focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10"
             )}
           >
+            <div className="flex shrink-0 items-center gap-1 rounded-xl bg-muted/80 p-1">
+              <button
+                type="button"
+                onClick={() => setMode("ai")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
+                  mode === "ai" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Sparkles className="size-3.5" />
+                AI
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("cmd")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
+                  mode === "cmd" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Terminal className="size-3.5" />
+                命令
+              </button>
+            </div>
             {currentServer && (
               <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                 <span className="size-1.5 rounded-full bg-emerald-400" />
@@ -400,7 +486,11 @@ export default function AiTerminalPage() {
                 }
               }}
               placeholder={
-                sid ? "用自然语言描述你想做的事，例如「查看磁盘使用」…" : "请先选择一台在线服务器"
+                sid
+                  ? mode === "cmd"
+                    ? "输入 Shell 命令，例如：ls -la"
+                    : "用自然语言描述你想做的事，例如「查看磁盘使用」…"
+                  : "请先选择一台在线服务器"
               }
               disabled={!sid || loading}
               className="h-auto flex-1 border-0 bg-transparent px-1 py-2.5 text-[0.95rem] shadow-none focus-visible:ring-0 dark:bg-transparent"
@@ -416,7 +506,9 @@ export default function AiTerminalPage() {
             </Button>
           </div>
           <p className="mt-2 text-center text-[11px] text-muted-foreground/70">
-            AI 会根据描述生成 Shell 命令并自动执行 · Enter 发送 · 仅对在线服务器生效
+            {mode === "cmd"
+              ? "命令将在所选服务器上直接执行 · Enter 执行 · 仅对在线服务器生效"
+              : "AI 会根据描述生成 Shell 命令并自动执行 · Enter 发送 · 仅对在线服务器生效"}
           </p>
         </div>
       </div>
@@ -530,7 +622,58 @@ export default function AiTerminalPage() {
   );
 }
 
-function EmptyState({ onPick, online }: { onPick: (prompt: string) => void; online: boolean }) {
+function EmptyState({ mode, onPick, online }: { mode: "ai" | "cmd"; onPick: (prompt: string) => void; online: boolean }) {
+  if (mode === "cmd") {
+    return (
+      <div className="flex flex-col items-center pt-8 text-center sm:pt-12">
+        <div className="relative mb-6">
+          <div className="absolute inset-0 -z-10 scale-150 rounded-full bg-emerald-400/20 blur-3xl" />
+          <div className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 shadow-xl shadow-emerald-500/30">
+            <Terminal className="size-8 text-white" />
+          </div>
+        </div>
+        <h2 className="flex items-center gap-2 text-xl font-semibold">
+          <Terminal className="size-4 text-emerald-500" />
+          直接输入命令执行
+        </h2>
+        <p className="mt-1.5 max-w-md text-sm text-muted-foreground">
+          在下方输入 Shell 命令，按 Enter 即可在所选服务器上直接执行，无需 AI 参与。
+        </p>
+
+        <div className="mt-8 grid w-full max-w-2xl grid-cols-2 gap-3 sm:grid-cols-3">
+          {CMD_SUGGESTIONS.map((cmd) => (
+            <button
+              key={cmd}
+              type="button"
+              onClick={() => onPick(cmd)}
+              disabled={!online}
+              className={cn(
+                "group flex flex-col items-start gap-2.5 rounded-xl border border-border/70 bg-card p-4 text-left transition-all",
+                "hover:-translate-y-0.5 hover:border-emerald-400/40 hover:bg-emerald-400/5 hover:shadow-lg hover:shadow-emerald-500/10",
+                "disabled:pointer-events-none disabled:opacity-40"
+              )}
+            >
+              <span className="flex size-8 items-center justify-center rounded-lg bg-emerald-400/10 text-emerald-500 transition-transform group-hover:scale-110">
+                <Terminal className="size-4" />
+              </span>
+              <span className="break-all font-mono text-xs">{cmd}</span>
+              <span className="flex items-center gap-0.5 text-xs text-muted-foreground transition-colors group-hover:text-emerald-500">
+                执行 <ChevronRight className="size-3" />
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {!online && (
+          <p className="mt-8 flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-3.5 py-1.5 text-xs text-amber-600 dark:text-amber-400">
+            <AlertTriangle className="size-3.5" />
+            当前工作区没有在线服务器，请先确认服务器上的 Agent 已启动
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center pt-8 text-center sm:pt-12">
       <div className="relative mb-6">

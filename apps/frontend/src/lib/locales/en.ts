@@ -17,7 +17,7 @@ const en = {
     tasks: "Tasks",
     firewall: "Firewall",
     tools: "Tools",
-    aiTerminal: "AI Terminal",
+    aiTerminal: "Terminal",
     appStore: "App Store",
     settings: "Settings",
   },
