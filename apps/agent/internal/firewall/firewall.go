@@ -143,7 +143,7 @@ func listChain(chain string) (*ChainInfo, error) {
 
 func parseChain(output string, chainName string) *ChainInfo {
 	lines := strings.Split(output, "\n")
-	info := &ChainInfo{Chain: chainName}
+	info := &ChainInfo{Chain: chainName, Rules: []Rule{}}
 
 	policyRe := regexp.MustCompile(`(?i)Chain\s+\S+\s+\(policy\s+(\S+)`)
 	for _, line := range lines {

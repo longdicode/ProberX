@@ -213,7 +213,7 @@ export default function FirewallPage() {
                 {chains.map((c) => (
                   <TabsTrigger key={c.chain} value={c.chain}>
                     {c.chain}
-                    <Badge variant="secondary" className="ml-2 text-xs">{c.rules.length}</Badge>
+                    <Badge variant="secondary" className="ml-2 text-xs">{c.rules?.length ?? 0}</Badge>
                   </TabsTrigger>
                 ))}
               </TabsList>
