@@ -55,6 +55,19 @@ Rules:
 - Adapt to the OS: prefer systemctl over service, apt over yum on Debian/Ubuntu.
 - If the request is ambiguous, ask for clarification in the explanation field.`
 
+// llmRequestTimeout returns the LLM API request timeout, configurable via
+// AGENT_LLM_TIMEOUT (default 120s).
+func llmRequestTimeout() time.Duration {
+	timeout := 120 * time.Second
+	if v := strings.TrimSpace(os.Getenv("AGENT_LLM_TIMEOUT")); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			timeout = d
+		}
+	}
+	return timeout
+}
+
+
 func ShellAIGenerate(req ShellAIGenerateRequest) (*ShellAIGenerateResponse, error) {
 	if req.Prompt == "" {
 		return nil, fmt.Errorf("prompt is required")
@@ -77,6 +90,8 @@ func callOpenAICompatAPI(req ShellAIGenerateRequest) (*ShellAIGenerateResponse, 
 		switch req.Provider {
 		case "deepseek":
 			apiURL = "https://api.deepseek.com/v1"
+		case "proberx":
+			apiURL = "http://127.0.0.1:11434/v1"
 		case "custom":
 			return nil, fmt.Errorf("api_url is required for custom provider")
 		default:
@@ -91,6 +106,8 @@ func callOpenAICompatAPI(req ShellAIGenerateRequest) (*ShellAIGenerateResponse, 
 		switch req.Provider {
 		case "deepseek":
 			model = "deepseek-chat"
+		case "proberx":
+			model = "proberx-coder"
 		default:
 			model = "gpt-4o-mini"
 		}
@@ -107,7 +124,7 @@ func callOpenAICompatAPI(req ShellAIGenerateRequest) (*ShellAIGenerateResponse, 
 	}
 	bodyBytes, _ := json.Marshal(body)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), llmRequestTimeout())
 	defer cancel()
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
@@ -176,7 +193,7 @@ func callClaudeAPI(req ShellAIGenerateRequest) (*ShellAIGenerateResponse, error)
 	}
 	bodyBytes, _ := json.Marshal(body)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), llmRequestTimeout())
 	defer cancel()
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(bodyBytes))

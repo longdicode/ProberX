@@ -1277,7 +1277,7 @@ func (c *Config) HandleToolsShellAIGenerate(w http.ResponseWriter, r *http.Reque
 			req.Provider = cfg.Provider
 		}
 	}
-	if req.Provider != "custom" && req.Provider != "claude" {
+	if req.Provider != "custom" && req.Provider != "claude" && req.Provider != "proberx" {
 		if req.APIKey == "" {
 			tools.WriteError(w, http.StatusBadRequest, "api_key is required")
 			return

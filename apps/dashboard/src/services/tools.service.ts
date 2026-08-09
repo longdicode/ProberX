@@ -244,7 +244,7 @@ export const fail2banBan = (wid: string, sid: string, body: { jail?: string; ip:
 // ── Shell AI ──────────────────────────────────────────────────────
 
 export const generateShellCommand = (wid: string, sid: string, body: { prompt: string; provider: string; model?: string; api_key?: string; api_url?: string }, db: DbClient) =>
-  POST<{ command: string; explanation?: string }>(wid, sid, "/tools/shell-ai/generate", { body, timeout: 45_000 }, db);
+  POST<{ command: string; explanation?: string }>(wid, sid, "/tools/shell-ai/generate", { body, timeout: 120_000 }, db);
 
 export const getShellAIConfig = (wid: string, sid: string, db: DbClient) =>
   GET<{ provider: string; model: string; api_key: string; api_url: string }>(wid, sid, "/tools/shell-ai/config", {}, db);

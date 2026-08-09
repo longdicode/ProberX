@@ -69,6 +69,7 @@ const PROVIDERS: { value: string; label: string; dot: string }[] = [
   { value: "openai", label: "OpenAI", dot: "bg-emerald-400" },
   { value: "deepseek", label: "DeepSeek", dot: "bg-sky-400" },
   { value: "claude", label: "Claude", dot: "bg-orange-400" },
+  { value: "proberx", label: "ProberX-Coder", dot: "bg-emerald-400" },
   { value: "custom", label: "自定义", dot: "bg-violet-400" },
 ];
 
@@ -76,8 +77,20 @@ const PROVIDER_DEFAULTS: Record<string, { model: string; url: string }> = {
   openai: { model: "gpt-4o-mini", url: "" },
   claude: { model: "claude-sonnet-4-6", url: "" },
   deepseek: { model: "deepseek-chat", url: "https://api.deepseek.com/v1" },
+  proberx: { model: "proberx-coder", url: "http://127.0.0.1:11434/v1" },
   custom: { model: "", url: "" },
 };
+const OLLAMA_LOCAL_URL = "http://127.0.0.1:11434/v1";
+const OLLAMA_PUBLIC_URL = "http://156.238.249.22:11434/v1";
+
+function proberxUrlFor(server?: { hostInfo?: Record<string, unknown> } | null): string {
+  const host = (server?.hostInfo as Record<string, unknown> | undefined)?.agent_host as string | undefined;
+  if (!host || host === "127.0.0.1" || host === "localhost" || host === "156.238.249.22") {
+    return OLLAMA_LOCAL_URL;
+  }
+  return OLLAMA_PUBLIC_URL;
+}
+
 
 const SUGGESTIONS: { icon: LucideIcon; label: string; prompt: string }[] = [
   { icon: HardDrive, label: "查看磁盘使用", prompt: "show disk usage" },
@@ -114,7 +127,7 @@ export default function AiTerminalPage() {
   const [mode, setMode] = useState<"ai" | "cmd">("ai");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
-  const [cfgProvider, setCfgProvider] = useState("openai");
+  const [cfgProvider, setCfgProvider] = useState("proberx");
   const [cfgModel, setCfgModel] = useState("");
   const [cfgApiKey, setCfgApiKey] = useState("");
   const [cfgApiUrl, setCfgApiUrl] = useState("");
@@ -164,6 +177,12 @@ export default function AiTerminalPage() {
   }, [wid, sid, endpoint]);
 
   useEffect(() => {
+    if (cfgProvider === "proberx" && !cfgApiUrl) {
+      setCfgApiUrl(proberxUrlFor(currentServer));
+    }
+  }, [cfgProvider, cfgApiUrl, currentServer]);
+
+  useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
@@ -194,9 +213,9 @@ export default function AiTerminalPage() {
         {
           prompt: content,
           provider: cfgProvider,
-          model: cfgModel || undefined,
+          model: cfgModel || "proberx-coder",
           api_key: apiKeyManuallySet.current ? cfgApiKey : undefined,
-          api_url: cfgApiUrl || undefined,
+          api_url: cfgApiUrl || (cfgProvider === "proberx" ? proberxUrlFor(currentServer) : undefined),
         }
       );
 
@@ -301,7 +320,7 @@ export default function AiTerminalPage() {
     if (!v) return;
     setCfgProvider(v);
     setCfgModel(PROVIDER_DEFAULTS[v]?.model || "");
-    setCfgApiUrl(PROVIDER_DEFAULTS[v]?.url || "");
+    setCfgApiUrl(v === "proberx" ? proberxUrlFor(currentServer) : PROVIDER_DEFAULTS[v]?.url || "");
   }
 
   async function saveAiConfig() {
@@ -311,9 +330,9 @@ export default function AiTerminalPage() {
     try {
       await api.put(endpoint("/tools/shell-ai/settings"), {
         provider: cfgProvider,
-        model: cfgModel || undefined,
+        model: cfgModel || "proberx-coder",
         api_key: apiKeyManuallySet.current ? cfgApiKey : undefined,
-        api_url: cfgApiUrl || undefined,
+        api_url: cfgApiUrl || (cfgProvider === "proberx" ? proberxUrlFor(currentServer) : undefined),
       });
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
@@ -581,7 +600,7 @@ export default function AiTerminalPage() {
               </p>
             </div>
 
-            {cfgProvider === "custom" && (
+            {(cfgProvider === "custom" || cfgProvider === "proberx") && (
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">API 地址</label>
                 <Input

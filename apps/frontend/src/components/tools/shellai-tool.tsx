@@ -20,7 +20,7 @@ export default function ShellAITool({ t, endpoint, meta, router, serverId, serve
   servers: any[];
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [provider, setProvider] = useState("deepseek");
+  const [provider, setProvider] = useState("proberx");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [apiUrl, setApiUrl] = useState("");
@@ -36,6 +36,7 @@ export default function ShellAITool({ t, endpoint, meta, router, serverId, serve
   const [configLoaded, setConfigLoaded] = useState(false);
   const hasSavedRef = useRef(false);
   const apiKeyManuallySet = useRef(false);
+  const currentServer = servers.find((s) => s.id === serverId);
 
   // Load saved config on mount
   useEffect(() => {
@@ -72,9 +73,9 @@ export default function ShellAITool({ t, endpoint, meta, router, serverId, serve
       try {
         await api.put(endpoint("/tools/shell-ai/settings"), {
           provider,
-          model: model || undefined,
+          model: model || "proberx-coder",
           api_key: apiKeyManuallySet.current ? apiKey : undefined,
-          api_url: apiUrl || undefined,
+          api_url: apiUrl || (provider === "proberx" ? proberxUrlFor(currentServer) : undefined),
         });
         hasSavedRef.current = true;
       } catch {
@@ -82,6 +83,12 @@ export default function ShellAITool({ t, endpoint, meta, router, serverId, serve
       }
     }, 800);
   }, [provider, model, apiKey, apiUrl, configLoaded]);
+
+  useEffect(() => {
+    if (provider === "proberx" && !apiUrl) {
+      setApiUrl(proberxUrlFor(currentServer));
+    }
+  }, [provider, apiUrl, currentServer]);
 
   useEffect(() => {
     if (!configLoaded) return;
@@ -95,7 +102,7 @@ export default function ShellAITool({ t, endpoint, meta, router, serverId, serve
     if (!v) return;
     setProvider(v);
     setModel(providerDefaults[v]?.model || "");
-    setApiUrl(providerDefaults[v]?.url || "");
+    setApiUrl(v === "proberx" ? proberxUrlFor(currentServer) : providerDefaults[v]?.url || "");
   };
 
   const handleApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -114,9 +121,9 @@ export default function ShellAITool({ t, endpoint, meta, router, serverId, serve
       const res = await api.post<{ command: string; explanation?: string }>(endpoint("/tools/shell-ai/generate"), {
         prompt,
         provider,
-        model: model || undefined,
+        model: model || "proberx-coder",
         api_key: apiKey || undefined,
-        api_url: apiUrl || undefined,
+        api_url: apiUrl || (provider === "proberx" ? proberxUrlFor(currentServer) : undefined),
       });
       setGeneratedCmd(res?.command || "");
       setExplanation(res?.explanation || "");
@@ -155,8 +162,20 @@ export default function ShellAITool({ t, endpoint, meta, router, serverId, serve
     openai: { model: "gpt-4o-mini", url: "" },
     claude: { model: "claude-sonnet-4-6", url: "" },
     deepseek: { model: "deepseek-chat", url: "https://api.deepseek.com/v1" },
+    proberx: { model: "proberx-coder", url: "http://127.0.0.1:11434/v1" },
     custom: { model: "", url: "" },
   };
+const OLLAMA_LOCAL_URL = "http://127.0.0.1:11434/v1";
+const OLLAMA_PUBLIC_URL = "http://156.238.249.22:11434/v1";
+
+function proberxUrlFor(server?: { hostInfo?: Record<string, unknown> } | null): string {
+  const host = (server?.hostInfo as Record<string, unknown> | undefined)?.agent_host as string | undefined;
+  if (!host || host === "127.0.0.1" || host === "localhost" || host === "156.238.249.22") {
+    return OLLAMA_LOCAL_URL;
+  }
+  return OLLAMA_PUBLIC_URL;
+}
+
 
   return (
     <div className="space-y-6">
@@ -184,6 +203,7 @@ export default function ShellAITool({ t, endpoint, meta, router, serverId, serve
                     <SelectItem value="openai">OpenAI</SelectItem>
                     <SelectItem value="claude">Anthropic Claude</SelectItem>
                     <SelectItem value="deepseek">DeepSeek</SelectItem>
+                    <SelectItem value="proberx">ProberX-Coder</SelectItem>
                     <SelectItem value="custom">{t("common.unknown")}</SelectItem>
                   </SelectContent>
                 </Select>
