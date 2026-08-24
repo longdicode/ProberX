@@ -21,10 +21,13 @@ import { membershipRoutes } from "./routes/memberships";
 import { toolsRoutes } from "./routes/tools";
 import { appStoreRoutes } from "./routes/app-store";
 import { mcpRoutes } from "./routes/mcp";
+import { inspectionRoutes } from "./routes/inspections";
 import { wsPlugin } from "./ws/index";
 import { startMetricsPoller, stopMetricsPoller } from "./services/metrics-poller";
 import { startProbePoller, stopProbePoller } from "./services/probe-poller";
 import { startCronPoller, stopCronPoller } from "./services/cron-poller";
+import { startExpiryNotifier, stopExpiryNotifier } from "./services/expiry-notifier";
+import { startInspectionScheduler, stopInspectionScheduler } from "./services/inspection-scheduler";
 
 const app = Fastify({
   logger: { level: env.NODE_ENV === "production" ? "info" : "debug" },
@@ -85,6 +88,7 @@ async function start() {
   await app.register(appStoreRoutes, { prefix: "/api/v1" });
   // MCP (Model Context Protocol) for AI agent integration
   await app.register(mcpRoutes, { prefix: "/api/v1" });
+  await app.register(inspectionRoutes, { prefix: "/api/v1" });
 
   // WebSocket
   await app.register(wsPlugin, { prefix: "/ws" });
@@ -108,6 +112,14 @@ async function start() {
   startCronPoller(app.db, 60);
   app.log.info("Cron poller started");
 
+  // Expiry notifier — checks server expiration every hour (7-day warning window)
+  startExpiryNotifier(app.db, 3600);
+  app.log.info("Expiry notifier started");
+
+  // Inspection scheduler — daily 08:00 AI health reports
+  startInspectionScheduler(app.db, 60);
+  app.log.info("Inspection scheduler started");
+
   // BullMQ workers — process notification dispatch and cron execution jobs
   if (env.QUEUE_ENABLED) {
     const { startNotificationWorker } = await import("./queues/workers/notification-worker");
@@ -125,6 +137,8 @@ async function start() {
     stopMetricsPoller();
     stopProbePoller();
     stopCronPoller();
+    stopExpiryNotifier();
+    stopInspectionScheduler();
     app.log.info("Pollers stopped");
   });
 

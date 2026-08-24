@@ -7,6 +7,7 @@ export const createServerBody = z.object({
   isHidden: z.boolean().optional().default(false),
   agentHost: z.string().min(1).max(255).optional(),
   agentPort: z.number().int().min(1).max(65535).optional().default(9800),
+  expiresAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expiresAt 需为 YYYY-MM-DD").optional(),
   installMode: z.enum(["online", "offline"]).optional().default("offline"),
   dashboardUrl: z.string().min(1).max(255).optional(),
   ssh: z.object({
@@ -23,6 +24,7 @@ export const updateServerBody = z.object({
   isHidden: z.boolean().optional(),
   agentHost: z.string().min(1).max(255).optional(),
   agentPort: z.number().int().min(1).max(65535).optional(),
+  expiresAt: z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "expiresAt 需为 YYYY-MM-DD"), z.null()]).optional(),
 }, undefined);
 
 export type CreateServerInput = z.infer<typeof createServerBody>;

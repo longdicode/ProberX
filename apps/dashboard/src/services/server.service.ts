@@ -19,6 +19,7 @@ export async function list(workspaceId: string, db: DbClient, limit = 50) {
     isOnline: servers.isOnline,
     isHidden: servers.isHidden,
     createdAt: servers.createdAt,
+    expiresAt: servers.expiresAt,
   }).from(servers)
     .where(eq(servers.workspaceId, workspaceId))
     .orderBy(desc(servers.createdAt))
@@ -69,6 +70,7 @@ export async function create(workspaceId: string, input: CreateServerInput, db: 
 		agentSecret,
 		isHidden: input.isHidden ?? false,
 		hostInfo,
+		expiresAt: input.expiresAt ? new Date(input.expiresAt + "T00:00:00Z") : null,
 	}).returning();
 	const result: Record<string, unknown> = { ...server, agentToken: agentSecret };
 	const dashboardUrl = input.dashboardUrl || process.env.PUBLIC_DASHBOARD_URL || "http://agent.yqone.cn:4000";
@@ -114,12 +116,17 @@ export async function update(workspaceId: string, serverId: string, input: Updat
 	  const hostInfo = (existing.hostInfo as Record<string, unknown>) ?? {};
 	  if (input.agentHost !== undefined) hostInfo.agent_host = input.agentHost;
 	  if (input.agentPort !== undefined) hostInfo.agent_port = input.agentPort;
+	  const expiresAt = input.expiresAt === undefined
+	    ? existing.expiresAt
+	    : (input.expiresAt ? new Date(input.expiresAt + "T00:00:00Z") : null);
 	  const [updated] = await db.update(servers)
 	    .set({
 	      name: input.name ?? existing.name,
 	      tags: input.tags ?? existing.tags,
 	      isHidden: input.isHidden ?? existing.isHidden,
 	      hostInfo,
+	      expiresAt,
+	      ...(input.expiresAt !== undefined ? { expiryNotifiedAt: null } : {}),
 	    })
     .where(and(eq(servers.id, serverId), eq(servers.workspaceId, workspaceId)))
     .returning();

@@ -12,5 +12,7 @@ export const servers = pgTable("servers", {
   lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
   isOnline: boolean("is_online").default(false),
   isHidden: boolean("is_hidden").default(false),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  expiryNotifiedAt: timestamp("expiry_notified_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -10,6 +10,9 @@ const envSchema = z.object({
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
   QUEUE_ENABLED: z.coerce.boolean().default(false),
+  LLM_API_URL: z.string().default("http://127.0.0.1:11434/v1"),
+  LLM_MODEL: z.string().default("proberx-coder"),
+  LLM_API_KEY: z.string().default(""),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -18,6 +18,7 @@ const en = {
     firewall: "Firewall",
     tools: "Tools",
     aiTerminal: "Terminal",
+    inspections: "AI Inspection",
     appStore: "App Store",
     settings: "Settings",
   },

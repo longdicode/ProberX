@@ -47,6 +47,14 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      LLM_API_URL: ${LLM_API_URL:-http://host.docker.internal:11434/v1}
+      LLM_MODEL: ${LLM_MODEL:-proberx-coder}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      PDF_FONT_PATH: ${PDF_FONT_PATH:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /usr/share/fonts:/usr/share/fonts:ro
     depends_on:
       postgres:
         condition: service_healthy

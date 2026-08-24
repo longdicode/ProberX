@@ -7,7 +7,7 @@ import { useUiStore } from "@/stores/ui-store";
 import { useLocale } from "@/stores/locale-store";
 import {
   LayoutDashboard, Server, Eye, Bell, Timer, Shield, Wrench, Settings,
-  ChevronLeft, ChevronRight, Radio, Terminal,
+  ChevronLeft, ChevronRight, Radio, Terminal, FileText,
 } from "lucide-react";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
@@ -26,6 +26,7 @@ export function Sidebar() {
     { href: "/firewall", label: t("nav.firewall"), icon: Shield },
     { href: "/tools", label: t("nav.tools"), icon: Wrench },
     { href: "/ai-terminal", label: t("nav.aiTerminal"), icon: Terminal },
+    { href: "/inspections", label: t("nav.inspections"), icon: FileText },
     { href: "/settings", label: t("nav.settings"), icon: Settings },
   ];
   if (!sidebarOpen) return null;

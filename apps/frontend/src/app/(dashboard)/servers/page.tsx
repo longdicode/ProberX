@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Server, Plus, Search, Copy, Pencil, Trash2, CheckSquare, XSquare, Terminal, Loader2 } from "lucide-react";
+import { Server, Plus, Search, Copy, Pencil, Trash2, CheckSquare, XSquare, Terminal, Loader2, CalendarClock } from "lucide-react";
 import { formatBytes } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageSkeleton } from "@/components/shared/loading-skeleton";
@@ -21,6 +21,21 @@ import { getToken } from "@/lib/auth";
 import { API_BASE_URL } from "@/lib/constants";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+
+function ExpiryBadge({ expiresAt }: { expiresAt: string }) {
+  const exp = new Date(expiresAt);
+  const expLocal = new Date(exp.getUTCFullYear(), exp.getUTCMonth(), exp.getUTCDate());
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const days = Math.round((expLocal.getTime() - today.getTime()) / 86400000);
+  const date = expiresAt.slice(0, 10);
+  const cls = days < 0
+    ? "bg-red-500/15 text-red-400 border-red-500/30"
+    : days <= 7
+      ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+      : "bg-muted text-muted-foreground border-border/60";
+  const label = days < 0 ? `已过期 ${-days} 天` : days === 0 ? "今天到期" : `剩余 ${days} 天`;
+  return <Badge className={`${cls} border`}>{label} · {date}</Badge>;
+}
 
 function timeAgo(dateStr: string, t: (key: string, params?: Record<string, string | number>) => string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -43,7 +58,7 @@ export default function ServersPage() {
 
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [form, setForm] = useState({ name: "", agentHost: "", agentPort: "9800", installMode: "offline", sshHost: "", sshPort: "22", sshUsername: "root", sshPassword: "" });
+  const [form, setForm] = useState({ name: "", agentHost: "", agentPort: "9800", installMode: "offline", sshHost: "", sshPort: "22", sshUsername: "root", sshPassword: "", expiresAt: "" });
   const [installStatus, setInstallStatus] = useState<string | null>(null);
   const [installDone, setInstallDone] = useState(false);
   const [installOk, setInstallOk] = useState(false);
@@ -66,6 +81,12 @@ export default function ServersPage() {
   const [batchCmd, setBatchCmd] = useState("");
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchResults, setBatchResults] = useState<{ serverId: string; serverName: string; output: string; error?: string }[]>([]);
+
+  // Expiry settings
+  const [expiryOpen, setExpiryOpen] = useState(false);
+  const [expiryTarget, setExpiryTarget] = useState<{ id: string; name: string; expiresAt?: string | null } | null>(null);
+  const [expiryDate, setExpiryDate] = useState("");
+  const [expirySaving, setExpirySaving] = useState(false);
 
   function toggleSelect(id: string) {
     setSelected((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
@@ -94,7 +115,7 @@ export default function ServersPage() {
 
   function resetDialog() {
     setOpen(false);
-    setForm({ name: "", agentHost: "", agentPort: "9800", installMode: "offline", sshHost: "", sshPort: "22", sshUsername: "root", sshPassword: "" });
+    setForm({ name: "", agentHost: "", agentPort: "9800", installMode: "offline", sshHost: "", sshPort: "22", sshUsername: "root", sshPassword: "", expiresAt: "" });
     setToken(null);
     setNewAgentId(null);
     setInstallStatus(null);
@@ -110,6 +131,7 @@ export default function ServersPage() {
     setSubmitting(true);
     try {
       const body: Record<string, unknown> = { name: form.name, installMode: form.installMode };
+      if (form.expiresAt) body.expiresAt = form.expiresAt;
       if (form.agentHost.trim()) body.agentHost = form.agentHost.trim();
       const port = parseInt(form.agentPort, 10);
       if (!isNaN(port)) body.agentPort = port;
@@ -176,6 +198,7 @@ export default function ServersPage() {
     setSubmitting(true);
     try {
       const body: Record<string, unknown> = { name: form.name };
+      body.expiresAt = form.expiresAt ? form.expiresAt : null;
       if (form.agentHost.trim()) body.agentHost = form.agentHost.trim();
       const port = parseInt(form.agentPort, 10);
       if (!isNaN(port)) body.agentPort = port;
@@ -222,19 +245,39 @@ export default function ServersPage() {
     } finally { setDeleting(false); }
   }
 
+  function openExpiry(s: { id: string; name: string; expiresAt?: string | null }) {
+    setExpiryTarget(s);
+    setExpiryDate(s.expiresAt ? s.expiresAt.slice(0, 10) : "");
+    setExpiryOpen(true);
+  }
+
+  async function handleSaveExpiry() {
+    if (!current?.id || !expiryTarget) return;
+    setExpirySaving(true);
+    try {
+      await api.patch(`/workspaces/${current.id}/servers/${expiryTarget.id}`, { expiresAt: expiryDate ? expiryDate : null });
+      queryClient.invalidateQueries({ queryKey: ["servers", current.id] });
+      toast.success(expiryDate ? `到期时间已保存：${expiryDate}` : "到期时间已清除");
+      setExpiryOpen(false);
+    } catch {
+      toast.error("保存到期时间失败");
+    } finally { setExpirySaving(false); }
+  }
+
   function handleCopy() {
     if (!token) return;
     navigator.clipboard.writeText(token);
     toast.success("Copied!");
   }
 
-  function openEdit(s: { id: string; name: string; hostInfo: Record<string, unknown> }) {
+  function openEdit(s: { id: string; name: string; hostInfo: Record<string, unknown>; expiresAt?: string | null }) {
     const hostInfo = s.hostInfo as Record<string, unknown> | null;
     setForm({
       name: s.name,
       agentHost: (hostInfo?.agent_host as string) || "",
       agentPort: String(hostInfo?.agent_port ?? "9800"),
       installMode: "offline", sshHost: "", sshPort: "22", sshUsername: "root", sshPassword: "",
+      expiresAt: s.expiresAt ? s.expiresAt.slice(0, 10) : "",
     });
     setEditingServer(s);
     setOpen(true);
@@ -308,7 +351,14 @@ export default function ServersPage() {
                   <div className="flex items-center gap-1.5 shrink-0 ml-2">
                     <ServerStatusBadge status={s.isOnline ? "online" : "offline"} />
                     <button
-                      onClick={(e) => { e.stopPropagation(); openEdit({ id: s.id, name: s.name, hostInfo: s.hostInfo }); }}
+                      onClick={(e) => { e.stopPropagation(); openExpiry(s); }}
+                      className="p-1 rounded hover:bg-amber-500/15 text-amber-400 hover:text-amber-300 transition-colors"
+                      title="设置到期时间"
+                    >
+                      <CalendarClock className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openEdit({ id: s.id, name: s.name, hostInfo: s.hostInfo, expiresAt: s.expiresAt }); }}
                       className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100"
                       title="Edit"
                     >
@@ -325,6 +375,15 @@ export default function ServersPage() {
                 </CardHeader>
                 <Link href={`/servers/${s.id}`}>
                   <CardContent>
+                    <div className="flex items-center gap-2">
+                      {s.expiresAt && <ExpiryBadge expiresAt={s.expiresAt} />}
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); openExpiry(s); }}
+                        className="text-xs text-muted-foreground hover:text-amber-300 transition-colors underline-offset-2 hover:underline"
+                      >
+                        {s.expiresAt ? "修改到期" : "＋ 设置到期时间"}
+                      </button>
+                    </div>
                     <div className="grid grid-cols-3 gap-2 text-center">
                       <div><div className="text-sm font-medium">{s.latestCpuPercent ? `${s.latestCpuPercent}%` : "--"}</div><div className="text-xs text-muted-foreground">{t("servers.cpu")}</div></div>
                       <div><div className="text-sm font-medium">{s.latestMemUsed ? formatBytes(s.latestMemUsed) : "--"}</div><div className="text-xs text-muted-foreground">{t("servers.mem")}</div></div>
@@ -370,6 +429,37 @@ export default function ServersPage() {
               {batchRunning ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Terminal className="w-4 h-4 mr-1" />}
               {batchRunning ? "Running..." : "Run"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={expiryOpen} onOpenChange={setExpiryOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>设置到期时间</DialogTitle>
+            <DialogDescription>
+              服务器「{expiryTarget?.name}」到期前 7 天将自动告警提醒（可在告警规则中停用）。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="sexpiry-date">到期日期（精确到天）</Label>
+            <Input id="sexpiry-date" type="date" value={expiryDate}
+              onChange={(e) => setExpiryDate(e.target.value)} />
+          </div>
+          <DialogFooter className="justify-between">
+            {expiryTarget?.expiresAt ? (
+              <Button variant="ghost" className="text-red-400 hover:text-red-300"
+                onClick={() => setExpiryDate("")} disabled={expirySaving}>
+                清除
+              </Button>
+            ) : <span />}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setExpiryOpen(false)} disabled={expirySaving}>取消</Button>
+              <Button onClick={handleSaveExpiry} disabled={expirySaving}>
+                {expirySaving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+                保存
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -437,6 +527,11 @@ export default function ServersPage() {
                 <Label htmlFor="sname">{t("monitors.name")}</Label>
                 <Input id="sname" placeholder={t("servers.namePlaceholder")} value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="sexpires">到期时间（可选，精确到天）</Label>
+                <Input id="sexpires" type="date" value={form.expiresAt}
+                  onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} />
               </div>
               {!editingServer && (
                 <div className="space-y-2">

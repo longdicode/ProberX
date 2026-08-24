@@ -25,6 +25,7 @@ export interface Server {
   isOnline: boolean;
   isHidden: boolean;
   createdAt: string;
+  expiresAt?: string | null;
   latestCpuPercent?: string | null;
   latestMemUsed?: number | null;
 }
@@ -389,5 +390,53 @@ export function useMembers(workspaceId: string | undefined) {
     queryKey: ["members", workspaceId],
     queryFn: () => api.get<Member[]>(`/workspaces/${workspaceId}/members`),
     enabled: !!workspaceId,
+  });
+}
+// --- AI Inspections ---
+
+export interface InspectionFinding {
+  level: "error" | "warning" | "info";
+  category: string;
+  title: string;
+  detail: string;
+  evidence: string;
+  suggestion: string;
+}
+
+export interface InspectionReport {
+  id: string;
+  serverId: string | null;
+  title: string;
+  trigger: string;
+  status: string;
+  healthScore: number | null;
+  summary: string | null;
+  findings: InspectionFinding[];
+  metricsSummary: Record<string, unknown>;
+  markdown: string | null;
+  rawEvidence: string | null;
+  error: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+}
+
+export function useInspectionReports(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: ["inspections", workspaceId],
+    queryFn: () => api.get<InspectionReport[]>(`/workspaces/${workspaceId}/inspections`),
+    enabled: !!workspaceId,
+  });
+}
+
+export function useInspectionReport(workspaceId: string | undefined, reportId: string | undefined) {
+  return useQuery({
+    queryKey: ["inspection", workspaceId, reportId],
+    queryFn: () => api.get<InspectionReport>(`/workspaces/${workspaceId}/inspections/${reportId}`),
+    enabled: !!workspaceId && !!reportId,
+    refetchInterval: (query) => {
+      const status = (query.state.data as InspectionReport | undefined)?.status;
+      return status === "running" ? 5000 : false;
+    },
   });
 }
