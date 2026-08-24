@@ -20,3 +20,18 @@ frp/
 
 # ����Դ�벻���
 /apps/website/
+
+# Sync/merge artifacts & backups
+.sync_tmp/
+# Nested repo copy (root only)
+/ProberX/
+# Training scratch files
+/ai-agent/
+# 软著申请材料（隐私，不入库）
+/soft_copyright_source/
+# Telegram bot runtime data (SQLite)
+apps/telegram-bot/data/
+# Scratch/sensitive files
+settings_b64.txt
+seed40.sql
+hello.obj
