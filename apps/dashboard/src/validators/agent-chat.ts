@@ -1,7 +1,18 @@
 import { z } from "zod";
+import { EXPERT_AGENT_IDS } from "../services/expert-agents";
+
+const AGENT_ENUM = [
+  "assistant",
+  "inspection",
+  "diagnosis",
+  "terminal",
+  "workflow",
+  "weekly",
+  ...EXPERT_AGENT_IDS,
+] as const;
 
 export const agentChatBody = z.object({
-  agent: z.enum(["assistant", "inspection", "diagnosis", "terminal", "workflow", "weekly"]).optional(),
+  agent: z.enum(AGENT_ENUM).optional(),
   workflowId: z.string().optional(),
   message: z.string().min(1).max(2000),
   history: z
@@ -11,3 +22,5 @@ export const agentChatBody = z.object({
 });
 
 export type AgentChatInput = z.infer<typeof agentChatBody>;
+
+

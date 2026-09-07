@@ -25,6 +25,8 @@ import { inspectionRoutes } from "./routes/inspections";
 import { diagnosisRoutes } from "./routes/diagnoses";
 import { agentChatRoutes } from "./routes/agent-chat";
 import { workflowRoutes } from "./routes/workflows";
+import { panelBindingRoutes } from "./routes/panel-bindings";
+import { serverResourceRoutes } from "./routes/server-resources";
 import { wsPlugin } from "./ws/index";
 import { startMetricsPoller, stopMetricsPoller } from "./services/metrics-poller";
 import { startProbePoller, stopProbePoller } from "./services/probe-poller";
@@ -95,6 +97,8 @@ async function start() {
 await app.register(diagnosisRoutes, { prefix: "/api/v1" });
 await app.register(agentChatRoutes, { prefix: "/api/v1" });
 await app.register(workflowRoutes, { prefix: "/api/v1" });
+await app.register(panelBindingRoutes, { prefix: "/api/v1" });
+await app.register(serverResourceRoutes, { prefix: "/api/v1" });
 
   // WebSocket
   await app.register(wsPlugin, { prefix: "/ws" });

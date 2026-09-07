@@ -15,3 +15,4 @@ export { apiKeys } from "./api-keys";
 export { appStoreEntries } from "./app-store";
 export { workflows } from "./workflows";
 export { memoryDocs } from "./memory-docs";
+export { panelBindings } from "./panel-bindings";

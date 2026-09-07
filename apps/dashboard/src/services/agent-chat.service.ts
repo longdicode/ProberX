@@ -1,10 +1,12 @@
 import { chatComplete } from "./llm-client";
 import { generateReport } from "./inspection.service";
-import { startDiagnosis } from "./diagnosis.service";
+import { startDiagnosis, getRun } from "./diagnosis.service";
 import { buildWeekly } from "./weekly.service";
 import { generateShellCommand, executeShellCommand } from "./tools.service";
 import * as workflowSvc from "./workflow.service";
 import { recallMemory, memorySourceLabel, indexMemory, latestMemoryByType } from "./memory.service";
+import { EXPERT_BY_ID, isExpertAgent, routeExpert } from "./expert-agents";
+import type { ExpertAgentId } from "./expert-agents";
 import { resolveAiLlm } from "./ai-settings.service";
 import type { ResolvedAiLlm } from "./ai-settings.service";
 import type { DbClient } from "../db/index";
@@ -20,7 +22,7 @@ export const AGENTS = [
   { id: "weekly", name: "AI 运维周报", desc: "自然语言汇总周期运维与价值", icon: "BarChart3", color: "#0ea5e9" },
 ] as const;
 
-export type AgentId = "assistant" | "inspection" | "diagnosis" | "terminal" | "workflow" | "weekly";
+export type AgentId = "assistant" | "inspection" | "diagnosis" | "terminal" | "workflow" | "weekly" | ExpertAgentId;
 
 const SYSTEM_PROMPTS: Partial<Record<AgentId, string>> = {
   assistant: `你是 ProberX 的智能运维助手。用户会向你咨询服务器运维、Linux 命令、网络、容器、网站等方面的问题。
@@ -388,6 +390,10 @@ export function routeIntent(
     return { agent: "weekly" };
   }
 
+  // 1.7) 专项诊断助手自动路由（12 个专家：网站/数据库/流量/安全/服务器/计划任务/文件/FTP/SSL/日志/DNS/性能）
+  const exp = routeExpert(m);
+  if (exp) return { agent: exp };
+
   // 2) inspection / health check
   if (/(巡检|体检|健康检查|健康评分|检查一下服务器|服务器健康|服务器怎么样|正常吗|是否正常)/.test(m)) {
     return { agent: "inspection" };
@@ -404,6 +410,63 @@ export function routeIntent(
   }
 
   return { agent: "assistant" };
+}
+
+// 把最近几轮对话整理成“仅用于理解连续问题意图”的上下文（不作为取证证据）
+function recentChatContext(history?: { role: "user" | "assistant"; content: string }[]): string {
+  const h = (history ?? []).slice(-6);
+  if (!h.length) return "";
+  return h
+    .map((m) => `${m.role === "user" ? "用户" : "助手"}：${(m.content ?? "").slice(0, 400)}`)
+    .join("\n");
+}
+
+// 诊断/专家完成后生成自然语言总结（只引用真实结论与证据，失败则保留默认文案）
+async function summarizeDiagnosisResult(
+  task: AgentTask,
+  db: DbClient,
+  runId: string,
+  llm: ResolvedAiLlm,
+  label: string
+): Promise<boolean> {
+  try {
+    const run = await getRun(task.workspaceId, runId, db);
+    if (run.status !== "success") return false;
+    const suggestions = (Array.isArray(run.suggestions) ? run.suggestions : []) as { title?: string; detail?: string }[];
+    const sugText = suggestions
+      .map((s) => `${s?.title ?? ""}：${s?.detail ?? ""}`)
+      .join("\n")
+      .slice(0, 1500);
+    setProgress(task, { label: `${label}·总结`, detail: "取证完成，正在整理自然语言结论", current: 10, total: 10 });
+    const step = pushStep(task, "自然语言总结", run.rootCause ? `根因：${run.rootCause.slice(0, 120)}` : "整理取证结论", "llm");
+    const raw = await chatComplete({
+      system:
+        `你是 ProberX 的运维专家。用户刚完成一次「${label}」（白名单只读命令逐步取证），请把结论整理成给用户的自然语言总结。\n` +
+        `要求：\n1. 只能使用下面提供的数据，禁止编造证据或步骤中没有的内容；\n` +
+        `2. 第一句给出整体结论（含置信度，区分“已确认/大概率/待验证”），随后 3-6 条要点，每条以“- ”开头；\n` +
+        `3. 明确区分“已确认事实”与“仍待验证”的内容，不要出现与证据冲突的断言；\n` +
+        `4. 正文 200-280 字，末尾空一行写“完整取证时间线与证据可在「查看排查详情」中打开。”`,
+      user:
+        `用户原问题：${task.message.slice(0, 500)}\n\n根因结论：${run.rootCause ?? "（无）"}\n\n` +
+        `证据与动态过程：\n${(run.evidence ?? "").slice(0, 2400)}\n\n修复/优化建议：\n${sugText || "（无）"}`,
+      apiUrl: llm.apiUrl,
+      apiKey: llm.apiKey,
+      model: llm.model,
+      temperature: 0.3,
+      maxTokens: 2048,
+      timeoutMs: 60_000,
+    });
+    const clean = (raw ?? "").trim();
+    endStep(step, "done", clean || "（无输出）", 0);
+    if (clean) task.text = clean;
+    return !!clean;
+  } catch (err) {
+    const last = task.steps[task.steps.length - 1];
+    if (last && last.tool === "自然语言总结" && last.status === "running") {
+      endStep(last, "error", String((err as Error).message));
+    }
+    return false;
+  }
 }
 
 export function startAgentChat(
@@ -449,8 +512,9 @@ async function runAgentTask(task: AgentTask, input: AgentChatInput, db: DbClient
     if (!workflowId) {
       const wfs = await workflowSvc.listWorkflows(wid, db);
       const routed = routeIntent(message, wfs as any);
-      agent = routed.agent;
-      workflowId = routed.workflowId;
+      // 显式点选（CAP_CARDS/专家助手）优先；未点选时按意图自动路由
+      agent = input.agent ?? routed.agent;
+      workflowId = input.workflowId ?? routed.workflowId;
     }
     task.agent = agent ?? "assistant";
 
@@ -560,7 +624,13 @@ async function runAgentTask(task: AgentTask, input: AgentChatInput, db: DbClient
       const res = await startDiagnosis(
         wid,
         sid,
-        { goal: message, title: "智能体自主排查", trigger: "manual", onProgress: (p) => setProgress(task, { ...p, total: 10 }) },
+        {
+          goal: message,
+          title: "智能体自主排查",
+          trigger: "manual",
+          context: recentChatContext(history),
+          onProgress: (p) => setProgress(task, { ...p, total: 10 }),
+        },
         db
       );
       endStep(step, "done", `完成 ${res.steps ?? 0} 步取证`, 0);
@@ -576,8 +646,48 @@ async function runAgentTask(task: AgentTask, input: AgentChatInput, db: DbClient
           0
         );
       }
-      task.text = `排查完成 ✅ 已执行 ${res.steps ?? 0} 步只读取证并定位根因。查看时间线卡片获取结论、置信度与修复建议。`;
       task.linkHref = `/diagnoses/${res.id}`;
+      const ok = await summarizeDiagnosisResult(task, db, res.id, llm, "自主排查");
+      if (!ok) {
+        task.text = `排查完成 ✅ 已执行 ${res.steps ?? 0} 步只读取证并定位根因。查看时间线卡片获取结论、置信度与修复建议。`;
+      }
+    } else if (isExpertAgent(agent)) {
+      // 专项诊断助手：与自主排查同一引擎，但使用专项提示词 + 工具白名单
+      const exp = EXPERT_BY_ID[agent];
+      task.kind = "diagnosis";
+      setProgress(task, { label: exp.name, detail: "正在规划专项取证并召回历史相似案例", current: 0, total: 10 });
+      const step = pushStep(task, exp.name, "通过白名单只读命令逐步取证定位问题", "agent");
+      const res = await startDiagnosis(
+        wid,
+        sid,
+        {
+          goal: message,
+          title: `${exp.name}：${message.slice(0, 40)}`,
+          trigger: "manual",
+          expertId: exp.id,
+          context: recentChatContext(history),
+          onProgress: (p) => setProgress(task, { ...p, total: 10 }),
+        },
+        db
+      );
+      endStep(step, "done", `完成 ${res.steps ?? 0} 步取证`, 0);
+      const memHits = ((res as { memoryHits?: MemoryHit[] }).memoryHits ?? []).slice(0, 5);
+      if (memHits.length) {
+        const memStep = pushStep(task, "记忆检索", `命中 ${memHits.length} 条历史相似案例`, "memory");
+        endStep(
+          memStep,
+          "done",
+          memHits
+            .map((h, i) => `${i + 1}. [${memorySourceLabel(h.sourceType)}] ${h.title}（相似度 ${Math.round(h.similarity * 100)}%）`)
+            .join("\n"),
+          0
+        );
+      }
+      task.linkHref = `/diagnoses/${res.id}`;
+      const summarized = await summarizeDiagnosisResult(task, db, res.id, llm, exp.name);
+      if (!summarized) {
+        task.text = `${exp.name}已完成 ✅ 已执行 ${res.steps ?? 0} 步只读取证并定位问题。查看时间线卡片获取结论、置信度与修复建议。`;
+      }
     } else if (agent === "terminal") {
       task.kind = "terminal";
       const genStep = pushStep(task, "生成命令", `意图：${message}`, "llm");

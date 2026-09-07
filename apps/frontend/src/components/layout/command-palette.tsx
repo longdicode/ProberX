@@ -4,7 +4,7 @@ import { useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useUiStore } from "@/stores/ui-store";
 import { useLocale } from "@/stores/locale-store";
-import { LayoutDashboard, Server, Eye, Bell, Timer, Shield, Wrench, Settings, Search } from "lucide-react";
+import { LayoutDashboard, Server, Eye, Bell, Timer, Shield, Wrench, Settings, Search, Store } from "lucide-react";
 
 export function CommandPalette() {
   const { commandPaletteOpen, setCommandPaletteOpen } = useUiStore();
@@ -19,6 +19,7 @@ export function CommandPalette() {
     { id: "tasks", label: t("command.goToTasks"), icon: Timer, href: "/tasks" },
     { id: "firewall", label: t("command.goToFirewall"), icon: Shield, href: "/firewall" },
     { id: "tools", label: t("command.goToTools"), icon: Wrench, href: "/tools" },
+    { id: "appCenter", label: t("command.goToAppCenter"), icon: Store, href: "/apps" },
     { id: "settings", label: t("command.goToSettings"), icon: Settings, href: "/settings" },
   ];
 

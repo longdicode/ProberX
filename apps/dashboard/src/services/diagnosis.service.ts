@@ -9,6 +9,8 @@ import type { DbClient } from "../db/index";
 import { createHash } from "node:crypto";
 import { resolveAiLlm } from "./ai-settings.service";
 import type { AiLlmOverrides } from "./ai-settings.service";
+import { expertDef } from "./expert-agents";
+import type { ExpertAgentDef } from "./expert-agents";
 
 // Types
 
@@ -186,13 +188,197 @@ export const DIAGNOSIS_TOOLS: Record<string, { desc: string; build: ToolBuild }>
     },
   },
 
+  // ---- 专项诊断助手新增只读工具（12 个专项助手共用；全部参数化+白名单命令） ----
+
+  mysql: {
+    desc: "MySQL 只读诊断（白名单 SQL，无凭据自动尝试本机 socket），args: {sub: status|processlist|slow|schema, db?: 库名}",
+    build: (a) => {
+      const sub = a.sub === "processlist" ? "processlist" : a.sub === "slow" ? "slow" : a.sub === "schema" ? "schema" : "status";
+      const db = safeName(a.db);
+      const S = (s: string) => "'" + s.replace(/'/g, "'\\''") + "'";
+      const qs: Record<string, string> = {
+        status:
+          "SHOW GLOBAL STATUS WHERE Variable_name IN ('Uptime','Threads_connected','Threads_running','Max_used_connections','Connections','Queries','Slow_queries','Aborted_connects','Open_tables');",
+        processlist: "SHOW FULL PROCESSLIST;",
+        slow: "SHOW VARIABLES WHERE Variable_name IN ('slow_query_log','slow_query_log_file','long_query_time'); SHOW GLOBAL STATUS LIKE 'Slow_queries';",
+        schema: db
+          ? `SELECT table_name AS t, ROUND((data_length+index_length)/1024/1024,2) AS size_mb FROM information_schema.tables WHERE table_schema=${S(db)} ORDER BY (data_length+index_length) DESC LIMIT 30;`
+          : "SELECT table_schema AS db, COUNT(*) AS tables, ROUND(SUM(data_length+index_length)/1024/1024,1) AS size_mb FROM information_schema.tables GROUP BY table_schema ORDER BY size_mb DESC LIMIT 20;",
+      };
+      const parts = [
+        "echo '=== mysql/mariadb 进程 ==='",
+        "ps -eo pid,cmd | grep -E '[m]ysqld|[m]ariadbd' | head -8 || true",
+        "echo '=== 3306 监听 ==='",
+        "ss -tlnp 2>/dev/null | grep ':3306 ' | head -8 || true",
+        "echo '=== 客户端版本 ==='",
+        "mysql --version 2>&1 | head -1 || true",
+        `echo '=== 只读SQL: ${sub} ==='`,
+        `mysql --protocol=socket -uroot --connect-timeout=5 -e ${S(qs[sub])} 2>&1 | head -50`,
+      ];
+      if (sub === "slow") {
+        parts.push(
+          "echo '=== 慢查询日志(常见路径尾部) ==='",
+          "for f in /www/server/data/mysql-slow.log /www/server/data/*-slow.log /var/lib/mysql/*-slow.log /var/log/mysql/mysql-slow.log /var/log/mysql/slow-query.log; do [ -f \"$f\" ] && { echo \"--- $f ---\"; tail -n 30 \"$f\"; }; done 2>/dev/null"
+        );
+      }
+      if (sub === "schema" && !db) {
+        parts.push("echo '=== 数据目录 ==='", "ls -d /www/server/data /var/lib/mysql 2>/dev/null || true");
+      }
+      return parts.join("\n");
+    },
+  },
+  crontab: {
+    desc: "列出系统/宝塔计划任务与 systemd timer（只读），args: {}",
+    build: () => [
+      "echo '=== crontab -l (当前用户) ==='",
+      "crontab -l 2>&1 | head -100",
+      "echo '=== /var/spool/cron/crontabs ==='",
+      "ls -la /var/spool/cron/crontabs/ 2>/dev/null | head -20 || true",
+      "for f in /var/spool/cron/crontabs/*; do [ -f \"$f\" ] && { echo \"--- $f ---\"; grep -vE '^\\s*(#|$)' \"$f\" | head -120; }; done 2>/dev/null",
+      "echo '=== /etc/crontab 与 /etc/cron.d ==='",
+      "cat /etc/crontab 2>/dev/null | grep -vE '^\\s*(#|$)' | head -60 || true",
+      "for f in /etc/cron.d/*; do [ -f \"$f\" ] && { echo \"--- $f ---\"; grep -vE '^\\s*(#|$)' \"$f\" | head -60; }; done 2>/dev/null",
+      "echo '=== 宝塔计划任务目录 /www/server/cron ==='",
+      "ls -lah /www/server/cron 2>/dev/null | head -20 || true",
+      "echo '=== systemd timers ==='",
+      "systemctl list-timers --no-pager 2>/dev/null | head -25 || true",
+    ].join("\n"),
+  },
+  auth_audit: {
+    desc: "安全只读审计：登录/失败登录/fail2ban/对外监听/异常连接，args: {}",
+    build: () => [
+      "echo '=== 最近成功登录 (last) ==='",
+      "last -n 15 2>/dev/null | head -20",
+      "echo '=== 失败登录 (lastb) ==='",
+      "lastb -n 15 2>/dev/null | head -20 || echo '(无 btmp/未开启 lastb)'",
+      "echo '=== 24h sshd 失败登录计数 ==='",
+      "journalctl -u ssh -u sshd --since -24h --no-pager 2>/dev/null | grep -icE 'failed|invalid user|authentication failure' || true",
+      "echo '=== fail2ban ==='",
+      "if command -v fail2ban-client >/dev/null 2>&1; then fail2ban-client status 2>&1 | head -30; else echo '(未安装 fail2ban-client)'; fi",
+      "echo '=== 对外(非回环)监听 ==='",
+      "ss -tlnp 2>/dev/null | awk 'NR>1 && $4 !~ /^127\\./ && $4 !~ /^\\[::1\\]/ {print}' | head -25 || true",
+      "echo '=== established 连接 TOP IP ==='",
+      "ss -tn state established 2>/dev/null | awk 'NR>1 {n=split($5,a,\":\"); ip=a[n-1]; c[ip]++} END {for (ip in c) print c[ip], ip}' | sort -rn | head -10 || true",
+    ].join("\n"),
+  },
+  access_traffic: {
+    desc: "分析 Web 访问日志流量：请求量/状态码/IP/TOP 路径（只读），args: {}",
+    build: () => [
+      'echo "=== 发现的 access 日志(最近6个) ==="',
+      'ls -1t /www/wwwlogs/*.log /www/wwwroot/*/logs/*access*.log /www/server/nginx/logs/*access*.log /var/log/nginx/*access*.log 2>/dev/null | head -6',
+      'echo "=== 逐文件统计(最近3个) ==="',
+      'for f in $(ls -1t /www/wwwlogs/*.log /www/wwwroot/*/logs/*access*.log /www/server/nginx/logs/*access*.log /var/log/nginx/*access*.log 2>/dev/null | head -3); do',
+      '  [ -f "$f" ] || continue',
+      '  echo "--- $f ---"',
+      '  wc -l "$f" 2>/dev/null | head -1',
+      '  echo "-- 状态码 TOP --"',
+      '  awk \'{print $9}\' "$f" 2>/dev/null | sort | uniq -c | sort -rn | head -6',
+      '  echo "-- 客户端 IP TOP --"',
+      '  awk \'{print $1}\' "$f" 2>/dev/null | sort | uniq -c | sort -rn | head -6',
+      '  echo "-- 请求路径 TOP --"',
+      '  awk \'{print $7}\' "$f" 2>/dev/null | sort | uniq -c | sort -rn | head -6',
+      '  echo "-- 最近 3 条 --"',
+      '  tail -n 3 "$f" 2>/dev/null',
+      'done',
+    ].join("\n"),
+  },
+  error_logs: {
+    desc: "读取系统/应用错误日志：journald + 常见 error 日志（只读），args: {}",
+    build: () => [
+      "echo '=== journald 错误(24h) ==='",
+      "journalctl -p err --since -24h --no-pager 2>/dev/null | head -60 || echo '(无 journalctl 或无错误)'",
+      "echo '=== 常见 error 日志尾部 ==='",
+      "for f in /www/wwwlogs/*.error.log /www/server/nginx/logs/error.log /var/log/nginx/error.log /www/server/panel/logs/error.log /www/server/panel/logs/panel_error.log; do [ -f \"$f\" ] && { echo \"--- $f ---\"; tail -n 25 \"$f\"; }; done 2>/dev/null",
+      "echo '=== 站点级 error 日志 ==='",
+      "ls -1t /www/wwwroot/*/logs/*error*.log 2>/dev/null | head -3 | while read f; do [ -f \"$f\" ] && { echo \"--- $f ---\"; tail -n 20 \"$f\"; }; done",
+      "echo '=== syslog/messages 严重级别 ==='",
+      "grep -iE 'error|critical|panic' /var/log/syslog /var/log/messages 2>/dev/null | tail -n 20 || true",
+    ].join("\n"),
+  },
+  dir_usage: {
+    desc: "目录空间占用分布与大文件 TOP（只读，限制层级），args: {}",
+    build: () => [
+      "echo '=== 主要目录总占用 ==='",
+      "du -sh /www/wwwroot /www/server /www/wwwlogs /var/log /home /root /tmp 2>/dev/null | sort -rh | head -12",
+      "echo '=== /www/wwwroot 一级占用 ==='",
+      "du -x --max-depth=1 /www/wwwroot 2>/dev/null | sort -rh | head -12",
+      "echo '=== 大文件 TOP（>=200MB，限 wwwroot/logs/tmp） ==='",
+      "find /www/wwwroot /var/log /tmp -xdev -type f -size +200M 2>/dev/null | head -20 | while read f; do ls -lh \"$f\" 2>/dev/null | awk '{print $5, $NF}'; done",
+    ].join("\n"),
+  },
+  ftp_check: {
+    desc: "FTP 服务诊断：进程/21 端口/配置/账户列表（只读），args: {}",
+    build: () => [
+      "echo '=== FTP 进程 ==='",
+      "ps -eo pid,cmd | grep -E '[p]ure-ftpd|[v]sftpd|[p]roftpd' | head -10 || true",
+      "echo '=== 21 端口 ==='",
+      "ss -tlnp 2>/dev/null | grep -E ':21 ' | head -10 || true",
+      "echo '=== FTP 配置文件(去注释) ==='",
+      "for f in /www/server/pure-ftpd/etc/pure-ftpd.conf /etc/pure-ftpd/pure-ftpd.conf /etc/vsftpd.conf /etc/vsftpd/vsftpd.conf; do [ -f \"$f\" ] && { echo \"--- $f ---\"; grep -vE '^\\s*(#|$)' \"$f\" | head -40; }; done 2>/dev/null",
+      "echo '=== FTP 用户(pure-pw list) ==='",
+      "if command -v pure-pw >/dev/null 2>&1; then pure-pw list 2>/dev/null || echo '(pure-pw 执行失败/无权限)'; else echo '(未安装 pure-pw)'; fi",
+      "echo '=== 被动端口范围(常见配置项) ==='",
+      "grep -iE 'PassivePortRange|pasv|portrange' /www/server/pure-ftpd/etc/pure-ftpd.conf /etc/pure-ftpd/pure-ftpd.conf /etc/vsftpd.conf 2>/dev/null | head -10 || true",
+    ].join("\n"),
+  },
+  ssl_config: {
+    desc: "读取服务器 SSL 证书配置与有效期（openssl 解析，只读），args: {domain?: 域名过滤}",
+    build: (a) => {
+      const domain = safeName(a.domain);
+      const parts = [
+        "echo '=== nginx -T 中的证书路径 ==='",
+        "(nginx -T 2>/dev/null || /usr/local/nginx/sbin/nginx -T 2>/dev/null || /www/server/nginx/sbin/nginx -T 2>/dev/null) | grep -E '^\\s*ssl_certificate(_key)?\\s' | head -12 || true",
+        "echo '=== 宝塔证书目录(openssl 解析) ==='",
+        "for d in /www/server/panel/vhost/cert/*/; do [ -d \"$d\" ] || continue;",
+        "  cert=$(ls \"$d\" 2>/dev/null | grep -E 'fullchain|\\.pem' | head -1);",
+        "  [ -n \"$cert\" ] || continue;",
+        "  echo \"--- $d$cert ---\";",
+        "  openssl x509 -noout -subject -issuer -dates -ext subjectAltName -in \"$d$cert\" 2>/dev/null || true;",
+        "done",
+      ];
+      if (domain) {
+        parts.push("echo '=== 匹配域名证书目录 ==='", `ls -1 /www/server/panel/vhost/cert/${domain}/ 2>/dev/null || true`);
+      }
+      parts.push(
+        "echo '=== letsencrypt 通用证书 ==='",
+        "for c in /etc/letsencrypt/live/*/fullchain.pem; do [ -f \"$c\" ] && { echo \"--- $c ---\"; openssl x509 -noout -subject -dates -ext subjectAltName -in \"$c\" 2>/dev/null; }; done 2>/dev/null"
+      );
+      return parts.join("\n");
+    },
+  },
+  dns_check: {
+    desc: "DNS 解析对照诊断：本机/公共 DNS/NS 记录（只读），args: {domain: 域名}",
+    build: (a) => {
+      const domain = safeName(a.domain);
+      if (!domain) return null;
+      return [
+        `echo '=== 本机解析 ${domain} ==='`,
+        `getent ahosts ${domain} 2>/dev/null | head -8 || echo '(getent 无结果)'`,
+        "echo '=== dig(默认DNS) ==='",
+        `dig +short ${domain} A 2>/dev/null | head -8 || true`,
+        "echo '=== dig @1.1.1.1 ==='",
+        `dig @1.1.1.1 +short ${domain} A 2>/dev/null | head -8 || true`,
+        "echo '=== dig @8.8.8.8 ==='",
+        `dig @8.8.8.8 +short ${domain} A 2>/dev/null | head -8 || true`,
+        "echo '=== NS 记录 ==='",
+        `dig +short ${domain} NS 2>/dev/null | head -8 || true`,
+        "echo '=== resolv.conf ==='",
+        "cat /etc/resolv.conf 2>/dev/null | head -10 || true",
+        "echo '=== hosts 干扰 ==='",
+        `grep -E "${domain}" /etc/hosts 2>/dev/null || echo '(hosts 无相关记录)'`,
+        "echo '=== 公网出口 IP ==='",
+        "curl -s -m 8 https://api.ipify.org 2>/dev/null || curl -s -m 8 https://ifconfig.me 2>/dev/null || echo '(无法获取)'",
+      ].join("\n");
+    },
+  },
+
 };
 
 const TOOL_DESCS = Object.entries(DIAGNOSIS_TOOLS)
   .map(([name, t]) => `- ${name}: ${t.desc}`)
   .join("\n");
 
-const SYSTEM_PROMPT = `你是一名资深 Linux 运维排障专家，运行在 ProberX 智能体平台上。
+const SYSTEM_PROMPT_CORE = `你是一名资深 Linux 运维排障专家，运行在 ProberX 智能体平台上。
 用户会给出一个需要排查的问题，你可以通过只读工具逐步采集证据，最终定位根因。
 
 规则：
@@ -207,9 +393,9 @@ const SYSTEM_PROMPT = `你是一名资深 Linux 运维排障专家，运行在 P
 ${TOOL_DESCS}
 
 输出格式（严格 JSON，字段名固定）：
-{"decision":"investigate|conclude|stop","note":"本次想法，100字内","action":{"tool":"工具名","args":{},"reason":"为什么执行这一步"},"conclusion":{"root_cause":"根因","confidence":0到100的整数,"evidence":"证据链描述","suggestions":[{"title":"建议标题","detail":"具体操作说明"}]}}
+{"decision":"investigate|conclude|stop","note":"本次想法，100字内","action":{"tool":"工具名","args":{},"reason":"为什么执行这一步"},"conclusion":{"root_cause":"根因","confidence":0到100的整数,"evidence":"证据链描述","suggestions":[{"title":"建议标题","detail":"具体操作说明"}]}}`;
 
-补充规则（Web/服务类问题与结论可信度）：
+const GENERIC_DOMAIN_RULES = `补充规则（Web/服务类问题与结论可信度）：
 - 涉及网站/域名/Web 访问问题时，优先用 web_stack/network 确认真实运行中的 Web 进程与 80/443 监听，再下结论。
 - 宝塔/BT 面板环境通常由 /www/server/nginx 启动 nginx（systemd 的 nginx.service 可能 disabled/inactive），禁止仅凭 systemd 状态断定“Web 服务未运行”。
 - 结论中的每个断言必须与已执行步骤输出一致：证据显示某端口在 LISTEN 或进程在运行，就不得写成“未监听/未运行”。
@@ -217,6 +403,21 @@ ${TOOL_DESCS}
 - 不要脑补故障（如把管理通道失败说成网站宕机）；无法取证时如实区分“已确认”与“未确认”。
 - 涉及域名/网站且结论涉及证书/HTTPS/访问失败时，必须用 cert_check/http_check 做真实（不带 -k）的 HTTPS 请求，或 openssl 校验证书的 subject/SAN/有效期；证书目录名或配置文件名与域名不一致（如 pannel vs panel）只是命名差异，不能作为证书无效的依据。
 - 当多维度证据（进程/端口/证书/本机与公网访问/日志）均正常、找不到故障痕迹时，应及时 conclude 并写明“当前检测未见异常或故障可能已恢复”，不要为凑步骤无限扩大排查；结论必须能被步骤证据支持。`;
+
+const SYSTEM_PROMPT = `${SYSTEM_PROMPT_CORE}\n\n${GENERIC_DOMAIN_RULES}`;
+
+// 专项助手规划提示：替换角色定位与工具白名单，追加专项规则与通用红线
+function buildExpertPlannerPrompt(ex: ExpertAgentDef): string {
+  const descs = ex.tools
+    .map((t) => (DIAGNOSIS_TOOLS[t] ? `- ${t}: ${DIAGNOSIS_TOOLS[t].desc}` : ""))
+    .filter(Boolean)
+    .join("\n");
+  const core = SYSTEM_PROMPT_CORE.replace(
+    /用户会给出一个需要排查的问题，你可以通过只读工具逐步采集证据，最终定位根因。\n/,
+    `本次任务由「${ex.name}」承接。\n用户会给出一个需要专项诊断的问题，你可以通过只读工具逐步采集证据，最终给出结论。\n专项范围：${ex.focus}\n`
+  ).replace(/可用工具：\n([\s\S]*?)(?=\n\n输出格式)/, `可用工具（仅限以下白名单，禁止使用白名单之外的任何工具）：\n${descs}`);
+  return `${core}\n\n【${ex.name} 专项规则】\n${ex.domainRules.join("\n")}\n\n通用红线：\n- 结论中的每个断言必须与已执行步骤输出一致：证据显示某端口在 LISTEN 或进程在运行，就不得写成“未监听/未运行”。\n- evidence 必须引用步骤号；仅有间接证据或无法核实时写明“待验证”，confidence 不超过 70；有直接证据且无冲突时方可 80 以上。\n- 不要编造步骤输出中不存在的证据；无法取证时如实区分“已确认”与“未确认”。`;
+}
 
 // 单步输出过长时保留首尾，避免关键行（如 ss 中 80/443 的监听行）被整段截掉
 function summarizeOutput(raw: string, head = 800, tail = 800): string {
@@ -525,6 +726,15 @@ const DIAG_FAMILIES: Record<string, string> = {
   disk_usage: "资源",
   memory: "资源",
   load: "资源",
+  mysql: "数据库",
+  crontab: "计划任务",
+  auth_audit: "安全/登录",
+  access_traffic: "访问日志",
+  error_logs: "错误日志",
+  dir_usage: "文件/磁盘",
+  ftp_check: "FTP",
+  ssl_config: "证书/HTTPS",
+  dns_check: "DNS",
 };
 
 // 取证维度流转：按真实步骤统计覆盖的维度（自动规划/多工具调用的稳定证据）
@@ -662,7 +872,7 @@ async function recoverStaleRuns(db: DbClient, serverId?: string) {
 export async function startDiagnosis(
   workspaceId: string,
   serverId: string,
-  opts: { goal: string; title?: string; trigger?: "manual" | "auto"; onProgress?: (p: { label: string; detail?: string; current: number; total: number }) => void },
+  opts: { goal: string; title?: string; trigger?: "manual" | "auto"; expertId?: string; context?: string; onProgress?: (p: { label: string; detail?: string; current: number; total: number }) => void },
   db: DbClient
 ) {
   const [server] = await db
@@ -674,6 +884,9 @@ export async function startDiagnosis(
 
   // AI 接口可配置到工作区设置；未启用时自动回退服务器环境变量
   const llm = await resolveAiLlm(db, workspaceId);
+  // 专项诊断助手：约束规划提示与工具白名单，并落库 expert_type
+  const expert = opts.expertId ? expertDef(opts.expertId) : null;
+  const plannerSys = expert ? buildExpertPlannerPrompt(expert) : SYSTEM_PROMPT;
 
   // Recover runs orphaned by a previous crash/restart before checking for active ones.
   await recoverStaleRuns(db, serverId);
@@ -700,6 +913,11 @@ export async function startDiagnosis(
         )
         .join("\n")}\n以上内容来自历史记忆库，不是本次取证证据；请以本次只读命令输出为准。`
     : "";
+  // 会话上下文：仅用于理解连续对话中的后续问题，严禁当作取证证据
+  const contextNote = opts.context
+    ? `\n\n【本次会话上下文 · 仅供理解用户连续对话的意图，严禁作为取证证据】\n${opts.context.slice(0, 2000)}`
+    : "";
+  const memoryNoteFull = memoryNote + contextNote;
 
   await db.insert(diagnosisRuns).values({
     id: runId,
@@ -709,6 +927,7 @@ export async function startDiagnosis(
     goal: opts.goal,
     status: "running",
     trigger: opts.trigger ?? "manual",
+    expertType: expert?.id ?? null,
   });
 
   const steps: DiagnosisStep[] = [];
@@ -733,12 +952,12 @@ export async function startDiagnosis(
         return { id: runId, status: "stopped" as const };
       }
 
-      const user = buildUserPrompt(opts.goal, server.name, host, steps, gateNote, memoryNote);
+      const user = buildUserPrompt(opts.goal, server.name, host, steps, gateNote, memoryNoteFull);
       let parsed: PlannerOut | null = null;
       let plannerRetries = 0;
       for (let attempt = 0; attempt < 3; attempt++) {
         const raw = await chatComplete({
-          system: attempt > 0 ? SYSTEM_PROMPT + "\n再次强调：只输出一个完整合法的 JSON 对象，不要 Markdown，不要截断。" : SYSTEM_PROMPT,
+          system: attempt > 0 ? plannerSys + "\n再次强调：只输出一个完整合法的 JSON 对象，不要 Markdown，不要截断。" : plannerSys,
           user,
           apiUrl: llm.apiUrl,
           apiKey: llm.apiKey,
@@ -833,6 +1052,26 @@ export async function startDiagnosis(
         await saveSteps(db, runId, steps);
         continue;
       }
+      // 专项助手工具白名单门禁：只允许该助手配置内工具
+      if (expert && !expert.tools.includes(toolName)) {
+        steps.push({
+          index: steps.length + 1,
+          tool: toolName || "unknown",
+          args,
+          reason,
+          command: "",
+          status: "error",
+          stdout: "",
+          stderr: `「${expert.name}」仅允许使用专项白名单工具，${toolName} 不在其中，请改用 ${expert.tools.slice(0, 6).join("/")} 等`,
+          exitCode: null,
+          judgment: parsed.note ?? "",
+          event: { type: "tool_error", label: "工具失败", detail: `超出专项白名单：${toolName}` },
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+        });
+        await saveSteps(db, runId, steps);
+        continue;
+      }
 
       const command = tool.build(args);
       if (!command) {
@@ -911,8 +1150,8 @@ export async function startDiagnosis(
       for (let attempt = 0; attempt < 3 && !conclusion; attempt++) {
         try {
           const raw = await chatComplete({
-            system: SYSTEM_PROMPT + "\n\n注意：步骤数已用尽，请直接给出 conclusion（decision=conclude）。",
-            user: buildUserPrompt(opts.goal, server.name, host, steps, gateNote, memoryNote) + "\n\n步骤数已用尽，请直接输出 conclude 结论，不要输出 investigate。",
+            system: plannerSys + "\n\n注意：步骤数已用尽，请直接给出 conclusion（decision=conclude）。",
+            user: buildUserPrompt(opts.goal, server.name, host, steps, gateNote, memoryNoteFull) + "\n\n步骤数已用尽，请直接输出 conclude 结论，不要输出 investigate。",
             apiUrl: llm.apiUrl,
             apiKey: llm.apiKey,
             model: llm.model,
@@ -1493,6 +1732,7 @@ export async function listRuns(workspaceId: string, db: DbClient, limit = 50, se
       title: diagnosisRuns.title,
       goal: diagnosisRuns.goal,
       trigger: diagnosisRuns.trigger,
+      expertType: diagnosisRuns.expertType,
       status: diagnosisRuns.status,
       rootCause: diagnosisRuns.rootCause,
       confidence: diagnosisRuns.confidence,

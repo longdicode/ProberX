@@ -18,6 +18,7 @@ import { MetricsCards } from "@/components/servers/metrics-cards";
 import { ProcessList } from "@/components/servers/process-list";
 import { FileManager } from "@/components/servers/file-manager";
 import { ContainerList } from "@/components/servers/container-list";
+import { ResourceOverviewManager } from "@/components/servers/resource-overview-manager";
 import { TerminalComponent } from "@/components/terminal/terminal";
 import { TerminalConnectionBar } from "@/components/terminal/terminal-connection-bar";
 import { terminalWsClient } from "@/lib/terminal-ws";
@@ -189,6 +190,7 @@ export default function ServerDetailPage() {
           <TabsTrigger value="terminal">{t("servers.terminal")}</TabsTrigger>
           <TabsTrigger value="files">{t("servers.files")}</TabsTrigger>
           <TabsTrigger value="containers">{t("servers.containers")}</TabsTrigger>
+          <TabsTrigger value="resources">{t("servers.resources")}</TabsTrigger>
         </TabsList>
         <TabsContent value="metrics" className="space-y-4 mt-4">
           <Card className="border-border/50">
@@ -240,6 +242,9 @@ export default function ServerDetailPage() {
         </TabsContent>
         <TabsContent value="containers" className="mt-4">
           <ContainerList serverId={sid} />
+        </TabsContent>
+        <TabsContent value="resources" className="mt-4">
+          {wid && <ResourceOverviewManager workspaceId={wid} serverId={sid} />}
         </TabsContent>
       </Tabs>
 

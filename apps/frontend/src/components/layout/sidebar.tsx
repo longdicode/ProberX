@@ -7,7 +7,7 @@ import { useUiStore } from "@/stores/ui-store";
 import { useLocale } from "@/stores/locale-store";
 import {
   LayoutDashboard, Server, Eye, Bell, Timer, Shield, Wrench, Settings,
-  ChevronLeft, ChevronRight, Radio, Bot,
+  ChevronLeft, ChevronRight, Radio, Bot, Store,
 } from "lucide-react";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
@@ -25,6 +25,7 @@ export function Sidebar() {
     { href: "/tasks", label: t("nav.tasks"), icon: Timer },
     { href: "/firewall", label: t("nav.firewall"), icon: Shield },
     { href: "/tools", label: t("nav.tools"), icon: Wrench },
+    { href: "/apps", label: t("nav.appCenter"), icon: Store },
     { href: "/settings", label: t("nav.settings"), icon: Settings },
   ];
   const navAgent = [

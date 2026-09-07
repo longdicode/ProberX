@@ -10,7 +10,7 @@ import { useLocale } from "@/stores/locale-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaces, useServers } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
-import { Wrench, Settings, Shield, FileText, Package, Globe, Rocket, Database, HardDrive, ShieldAlert, Store, Globe as GlobeIcon, Container } from "lucide-react";
+import { Wrench, Settings, Shield, FileText, Package, Globe, Rocket, Database, HardDrive, ShieldAlert, Globe as GlobeIcon, Container } from "lucide-react";
 
 const toolCards = [
   { id: "systemd", titleKey: "tools.systemdTitle", descKey: "tools.systemdDesc", icon: Settings },
@@ -18,7 +18,6 @@ const toolCards = [
   { id: "logs", titleKey: "tools.logsTitle", descKey: "tools.logsDesc", icon: FileText },
   { id: "packages", titleKey: "tools.packagesTitle", descKey: "tools.packagesDesc", icon: Package },
   { id: "nginx", titleKey: "tools.nginxTitle", descKey: "tools.nginxDesc", icon: Globe },
-  { id: "app-center", title: "应用中心", desc: "18 个热门自托管应用，一键部署到服务器", icon: Store },
   { id: "databases", titleKey: "tools.databasesTitle", descKey: "tools.databasesDesc", icon: Database },
   { id: "backups", titleKey: "tools.backupsTitle", descKey: "tools.backupsDesc", icon: HardDrive },
   { id: "security", titleKey: "tools.securityTitle", descKey: "tools.securityDesc", icon: ShieldAlert },

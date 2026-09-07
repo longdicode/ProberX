@@ -9,6 +9,7 @@ export const diagnosisRuns = pgTable("diagnosis_runs", {
   title: varchar("title", { length: 255 }).notNull(),
   goal: text("goal").notNull(),
   trigger: varchar("trigger", { length: 20 }).notNull().default("manual"),
+  expertType: varchar("expert_type", { length: 40 }),
   status: varchar("status", { length: 20 }).notNull().default("running"),
   steps: jsonb("steps").default([]),
   rootCause: text("root_cause"),

@@ -24,10 +24,29 @@ import {
   Bot, Send, Loader2, ShieldCheck, CheckCircle2, XCircle,
   Mic, Volume2, VolumeX, History, Plus, Play, Pencil, Trash2, X,
   Workflow as WorkflowIcon, Server, Sparkles, ArrowRight, BarChart3, Stethoscope,
-  Terminal as TerminalIcon, RefreshCw,
+  Terminal as TerminalIcon, RefreshCw, Globe, Database, Activity, ShieldAlert,
+  CalendarClock, FolderSearch, UploadCloud, ScrollText, Network, Gauge,
 } from "lucide-react";
 
-type AgentId = "assistant" | "inspection" | "diagnosis" | "terminal" | "workflow" | "weekly";
+type AgentId =
+  | "assistant"
+  | "inspection"
+  | "diagnosis"
+  | "terminal"
+  | "workflow"
+  | "weekly"
+  | "website-diag"
+  | "mysql-diag"
+  | "traffic-diag"
+  | "security-diag"
+  | "server-diag"
+  | "cron-diag"
+  | "file-diag"
+  | "ftp-diag"
+  | "ssl-diag"
+  | "log-diag"
+  | "dns-diag"
+  | "perf-diag";
 type MsgKind = "text" | "inspection" | "diagnosis" | "terminal" | "workflow" | "weekly";
 type MsgStatus = "running" | "done" | "failed";
 
@@ -74,6 +93,18 @@ const AGENT_META: Record<AgentId, { name: string; cls: string }> = {
   terminal: { name: "命令执行", cls: "text-amber-400 border-amber-500/30 bg-amber-500/10" },
   weekly: { name: "AI 运维周报", cls: "text-sky-400 border-sky-500/30 bg-sky-500/10" },
   workflow: { name: "自定义工作流", cls: "text-cyan-400 border-cyan-500/30 bg-cyan-500/10" },
+  "website-diag": { name: "网站诊断助手", cls: "text-orange-400 border-orange-500/30 bg-orange-500/10" },
+  "mysql-diag": { name: "数据库诊断助手", cls: "text-cyan-400 border-cyan-500/30 bg-cyan-500/10" },
+  "traffic-diag": { name: "网站流量分析助手", cls: "text-teal-400 border-teal-500/30 bg-teal-500/10" },
+  "security-diag": { name: "安全诊断助手", cls: "text-red-400 border-red-500/30 bg-red-500/10" },
+  "server-diag": { name: "服务器分析助手", cls: "text-violet-400 border-violet-500/30 bg-violet-500/10" },
+  "cron-diag": { name: "计划任务诊断助手", cls: "text-amber-400 border-amber-500/30 bg-amber-500/10" },
+  "file-diag": { name: "文件分析助手", cls: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" },
+  "ftp-diag": { name: "FTP 诊断助手", cls: "text-pink-400 border-pink-500/30 bg-pink-500/10" },
+  "ssl-diag": { name: "SSL 诊断助手", cls: "text-blue-400 border-blue-500/30 bg-blue-500/10" },
+  "log-diag": { name: "日志分析助手", cls: "text-indigo-400 border-indigo-500/30 bg-indigo-500/10" },
+  "dns-diag": { name: "DNS 诊断助手", cls: "text-sky-400 border-sky-500/30 bg-sky-500/10" },
+  "perf-diag": { name: "性能分析助手", cls: "text-purple-400 border-purple-500/30 bg-purple-500/10" },
 };
 
 const QUICK_ACTIONS = [
@@ -143,6 +174,78 @@ const CAP_CARDS: {
     icon: BarChart3,
     hover: "hover:border-sky-500/40",
     iconBox: "bg-sky-500/15 text-sky-400 border-sky-500/30",
+  },
+];
+
+// 12 个专项诊断助手（点选直达；对话也会按意图自动路由）
+const EXPERT_CARDS: {
+  agent: AgentId;
+  name: string;
+  desc: string;
+  prompt: string;
+  icon: typeof Bot;
+  hover: string;
+  iconBox: string;
+}[] = [
+  {
+    agent: "website-diag", name: "网站诊断助手", desc: "站点配置 / 运行状态 / 访问链路",
+    prompt: "帮我全面诊断一下这台服务器上的网站运行状态与配置",
+    icon: Globe, hover: "hover:border-orange-500/40", iconBox: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+  },
+  {
+    agent: "mysql-diag", name: "数据库诊断助手", desc: "MySQL 状态 / 慢查询 / 库表大小",
+    prompt: "帮我看看 MySQL 运行状态、慢查询和库表大小",
+    icon: Database, hover: "hover:border-cyan-500/40", iconBox: "bg-cyan-500/15 text-cyan-400 border-cyan-500/30",
+  },
+  {
+    agent: "traffic-diag", name: "网站流量分析助手", desc: "访问趋势 / 来源 / 带宽使用",
+    prompt: "分析一下网站最近的访问流量与来源分布",
+    icon: Activity, hover: "hover:border-teal-500/40", iconBox: "bg-teal-500/15 text-teal-400 border-teal-500/30",
+  },
+  {
+    agent: "security-diag", name: "安全诊断助手", desc: "入侵迹象 / 异常进程 / 登录审计",
+    prompt: "帮我做一次服务器安全风险检查",
+    icon: ShieldAlert, hover: "hover:border-red-500/40", iconBox: "bg-red-500/15 text-red-400 border-red-500/30",
+  },
+  {
+    agent: "server-diag", name: "服务器分析助手", desc: "资源占用 / 健康状态 / 隐患分析",
+    prompt: "分析一下服务器当前的资源使用和健康状况",
+    icon: Server, hover: "hover:border-violet-500/40", iconBox: "bg-violet-500/15 text-violet-400 border-violet-500/30",
+  },
+  {
+    agent: "cron-diag", name: "计划任务诊断助手", desc: "Crontab / 宝塔计划任务 / Timer",
+    prompt: "帮我看看这台服务器的定时任务有没有异常",
+    icon: CalendarClock, hover: "hover:border-amber-500/40", iconBox: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  },
+  {
+    agent: "file-diag", name: "文件分析助手", desc: "目录占用 / 大文件 / 权限建议",
+    prompt: "分析一下服务器文件占用情况，帮我找出大文件",
+    icon: FolderSearch, hover: "hover:border-emerald-500/40", iconBox: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  },
+  {
+    agent: "ftp-diag", name: "FTP 诊断助手", desc: "连接配置 / 账户权限 / 端口",
+    prompt: "帮我诊断一下 FTP 为什么连不上",
+    icon: UploadCloud, hover: "hover:border-pink-500/40", iconBox: "bg-pink-500/15 text-pink-400 border-pink-500/30",
+  },
+  {
+    agent: "ssl-diag", name: "SSL 诊断助手", desc: "证书有效期 / SAN / HTTPS 握手",
+    prompt: "检查一下服务器上所有 SSL 证书的有效期与配置",
+    icon: ShieldCheck, hover: "hover:border-blue-500/40", iconBox: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  },
+  {
+    agent: "log-diag", name: "日志分析助手", desc: "错误日志 / 异常定位 / 来源统计",
+    prompt: "分析一下这台服务器最近的错误日志",
+    icon: ScrollText, hover: "hover:border-indigo-500/40", iconBox: "bg-indigo-500/15 text-indigo-400 border-indigo-500/30",
+  },
+  {
+    agent: "dns-diag", name: "DNS 诊断助手", desc: "解析记录 / 生效状态 / 公共 DNS 对照",
+    prompt: "帮我检查一下域名 DNS 解析是否正常生效",
+    icon: Network, hover: "hover:border-sky-500/40", iconBox: "bg-sky-500/15 text-sky-400 border-sky-500/30",
+  },
+  {
+    agent: "perf-diag", name: "性能分析助手", desc: "CPU / 内存 / 磁盘 IO 瓶颈定位",
+    prompt: "分析一下服务器当前的性能瓶颈",
+    icon: Gauge, hover: "hover:border-purple-500/40", iconBox: "bg-purple-500/15 text-purple-400 border-purple-500/30",
   },
 ];
 
@@ -768,7 +871,7 @@ export default function AgentPage() {
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-sm">运维智能体</p>
-            <p className="text-xs text-muted-foreground truncate">一句话描述意图 · 支持巡检 / 排查 / 终端 / 周报 / 自定义工作流</p>
+            <p className="text-xs text-muted-foreground truncate">一句话描述意图 · 自动路由 12 个专项助手 / 巡检 / 排查 / 终端 / 周报 / 自定义工作流</p>
           </div>
           <div className="ml-auto flex items-center gap-2 shrink-0">
             {selServer && (
@@ -806,7 +909,7 @@ export default function AgentPage() {
                     <Bot className="h-6 w-6" />
                   </div>
                   <h2 className="text-xl font-bold">运维智能体</h2>
-                  <p className="text-sm text-muted-foreground">一句话描述意图，或直接点选能力 · 自动调用巡检 / 排查 / 终端 / 周报</p>
+                  <p className="text-sm text-muted-foreground">一句话描述意图，或点选下方能力 · 自动路由 12 个专项诊断助手与巡检 / 排查 / 终端 / 周报</p>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2 items-start">
@@ -928,6 +1031,35 @@ export default function AgentPage() {
                   </section>
                 </div>
 
+                <section className="rounded-xl border border-border bg-card/40 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    <p className="text-sm font-semibold">专项诊断助手</p>
+                    <span className="text-[11px] text-muted-foreground">对话会自动匹配，也可点选直达（共 12 个）</span>
+                  </div>
+                  <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
+                    {EXPERT_CARDS.map((c) => (
+                      <button
+                        key={c.agent}
+                        disabled={!serverId || loading}
+                        onClick={() => send(c.prompt, c.agent)}
+                        className={cn(
+                          "group flex items-start gap-2.5 rounded-lg border border-border bg-background/50 p-2.5 text-left transition-colors hover:shadow-sm disabled:opacity-50",
+                          c.hover
+                        )}
+                      >
+                        <span className={cn("flex h-7 w-7 items-center justify-center rounded-lg border shrink-0", c.iconBox)}>
+                          <c.icon className="h-3.5 w-3.5" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-xs font-semibold leading-tight">{c.name}</span>
+                          <span className="block text-[11px] text-muted-foreground leading-snug line-clamp-2">{c.desc}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
                 <div className="flex flex-wrap justify-center gap-2">
                   {SUGGESTIONS.map((s) => (
                     <button
@@ -970,23 +1102,40 @@ export default function AgentPage() {
 
         <div className="border-t border-border/60 px-4 py-3">
           {messages.length > 0 && (
-            <div className="flex items-center gap-1.5 flex-wrap mb-2">
-              <span className="text-[11px] text-muted-foreground/70 mr-0.5">快捷切换：</span>
-              {CAP_CARDS.map((c) => (
-                <button
-                  key={c.agent}
-                  onClick={() => send(c.prompt, c.agent)}
-                  disabled={!serverId || loading}
-                  title={c.desc}
-                  className={cn("inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 pl-1 pr-2.5 h-7 text-[11px] text-foreground transition-colors disabled:opacity-50", c.hover)}
-                >
-                  <span className={cn("flex h-5 w-5 items-center justify-center rounded-full border", c.iconBox)}>
-                    <c.icon className="h-3 w-3" />
-                  </span>
-                  {c.name}
-                </button>
-              ))}
-            </div>
+            <>
+              <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                <span className="text-[11px] text-muted-foreground/70 mr-0.5">快捷切换：</span>
+                {CAP_CARDS.map((c) => (
+                  <button
+                    key={c.agent}
+                    onClick={() => send(c.prompt, c.agent)}
+                    disabled={!serverId || loading}
+                    title={c.desc}
+                    className={cn("inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 pl-1 pr-2.5 h-7 text-[11px] text-foreground transition-colors disabled:opacity-50", c.hover)}
+                  >
+                    <span className={cn("flex h-5 w-5 items-center justify-center rounded-full border", c.iconBox)}>
+                      <c.icon className="h-3 w-3" />
+                    </span>
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                <span className="text-[11px] text-muted-foreground/70 mr-0.5">专项助手：</span>
+                {EXPERT_CARDS.map((c) => (
+                  <button
+                    key={c.agent}
+                    onClick={() => send(c.prompt, c.agent)}
+                    disabled={!serverId || loading}
+                    title={c.desc}
+                    className={cn("inline-flex items-center gap-1 rounded-full border border-border bg-background/60 pl-1.5 pr-2 h-6 text-[10px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50", c.hover)}
+                  >
+                    <c.icon className="h-3 w-3 shrink-0" />
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            </>
           )}
           <div className={cn(
             "flex items-center gap-2 rounded-xl border border-border bg-card p-1.5 pl-3 shadow-sm",
@@ -997,9 +1146,14 @@ export default function AgentPage() {
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder={listening ? "正在聆听，请说话…" : "描述意图，如：检查服务器健康 / 网站504排查 / 生成本周周报…"}
-              disabled={!serverId || loading}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" || e.shiftKey) return;
+                e.preventDefault();
+                if (loading) { toast("上一任务仍在执行，可先输入，完成后点击发送"); return; }
+                send();
+              }}
+              placeholder={!serverId ? "请先在左侧选择一台在线服务器" : listening ? "正在聆听，请说话…" : "描述意图，如：检查服务器健康 / 网站504排查 / 生成本周周报…"}
+              disabled={!serverId}
               className="flex-1 bg-transparent outline-none text-sm px-1 py-2 placeholder:text-muted-foreground/60"
             />
             {micSupported && (
@@ -1030,7 +1184,7 @@ export default function AgentPage() {
           </div>
           <p className="text-[11px] text-muted-foreground/70 mt-2 flex items-center gap-1.5">
             <ShieldCheck className="h-3 w-3 text-emerald-500" />
-            已自动调用：巡检 / 排查 / 周报 / 命令 / 工作流，安全模式下仅执行只读操作
+            已自动调用：AI 巡检 / 自主排查 / 12 个专项助手 / 周报 / 命令 / 工作流，安全模式下仅执行只读操作
           </p>
         </div>
       </main>
@@ -1043,7 +1197,7 @@ export default function AgentPage() {
               <WorkflowIcon className="h-5 w-5 text-cyan-400" />创建工作流
             </DialogTitle>
             <DialogDescription>
-              一句话描述意图，自动调用巡检 / 排查 / 命令 / 工作流
+              一句话描述意图，自动路由专项助手 / 巡检 / 排查 / 命令 / 工作流
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
