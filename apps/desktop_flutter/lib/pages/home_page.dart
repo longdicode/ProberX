@@ -140,7 +140,7 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       body: Row(
         children: [
-          // ── 左侧窄导航 ──
+          // 左侧窄导航
           Container(
             width: 64,
             decoration: BoxDecoration(
@@ -188,7 +188,7 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
           ),
-          // ── 主内容区 ──
+          // 主内容区
           Expanded(
             child: Column(
               children: [
@@ -203,7 +203,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ── 顶部栏 ──
+  // 顶部栏
   Widget _topBar() {
     const titles = ["服务器", "监控面板", "监控任务", "告警", "设置"];
     final title = titles[_navIndex];
@@ -353,7 +353,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ── 主体 ──  // ── 主体 ──
+  // 主体
   Widget _body(ColorScheme scheme, List<Server> filtered) {
     final wid = _selectedWorkspaceId;
     if (wid == null) {
@@ -496,7 +496,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ── 侧边导航项 ──  // ── 侧边导航项 ──
+  // 侧边导航项
   Widget _railItem(
     IconData icon,
     String label,

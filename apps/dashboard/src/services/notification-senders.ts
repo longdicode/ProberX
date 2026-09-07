@@ -11,7 +11,7 @@ export interface NotificationPayload {
   eventId?: string;
 }
 
-// ── Helpers ──────────────────────────────────────────────
+// Helpers
 
 function severityColor(severity: string): string {
   const colors: Record<string, string> = {
@@ -44,7 +44,7 @@ function formatMarkdownBody(payload: NotificationPayload): string {
   return lines.join("\n");
 }
 
-// ── DingTalk HMAC-SHA256 signing ─────────────────────────
+// DingTalk HMAC-SHA256 signing
 
 function signDingTalk(timestamp: number, secret: string): string {
   const sign = crypto
@@ -54,7 +54,7 @@ function signDingTalk(timestamp: number, secret: string): string {
   return `&timestamp=${timestamp}&sign=${sign}`;
 }
 
-// ── Feishu HMAC-SHA256 signing ───────────────────────────
+// Feishu HMAC-SHA256 signing
 
 function signFeishu(timestamp: string, secret: string): string {
   return crypto
@@ -63,7 +63,7 @@ function signFeishu(timestamp: string, secret: string): string {
     .digest("base64");
 }
 
-// ── SMTP transporter (lazy singleton) ────────────────────
+// SMTP transporter (lazy singleton)
 
 let transporter: ReturnType<typeof nodemailer.createTransport> | null = null;
 
@@ -82,7 +82,7 @@ function getTransporter() {
   return transporter;
 }
 
-// ── Per-channel sender functions ─────────────────────────
+// Per-channel sender functions
 
 export async function sendWebhook(
   config: Record<string, unknown>,
@@ -324,7 +324,7 @@ export async function sendTelegramBot(
   });
 }
 
-// ── Unified sender lookup ────────────────────────────────
+// Unified sender lookup
 
 const SENDERS: Record<
   string,

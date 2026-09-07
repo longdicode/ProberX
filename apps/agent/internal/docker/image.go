@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// ── Types ──────────────────────────────────────────────────────────────
+// Types
 
 type ImageInfo struct {
 	ID          string   `json:"id"`
@@ -43,7 +43,7 @@ type ImagePruneResult struct {
 	SpaceReclaimed int64 `json:"space_reclaimed"`
 }
 
-// ── Internal Docker API types ─────────────────────────────────────────
+// Internal Docker API types
 
 type dockerImageJSON struct {
 	ID          string   `json:"Id"`
@@ -80,7 +80,7 @@ type dockerPrunedImage struct {
 	Untagged string `json:"Untagged"`
 }
 
-// ── Public API ─────────────────────────────────────────────────────────
+// Public API
 
 // ListImages returns all Docker images.
 func ListImages() ([]ImageInfo, error) {

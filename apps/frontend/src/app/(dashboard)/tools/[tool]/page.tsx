@@ -18,7 +18,6 @@ import NginxTool from "@/components/tools/nginx-tool";
 import DatabasesTool from "@/components/tools/databases-tool";
 import BackupsTool from "@/components/tools/backups-tool";
 import SecurityTool from "@/components/tools/security-tool";
-import ShellAITool from "@/components/tools/shellai-tool";
 import DnsTool from "@/components/tools/dns-tool";
 import DockerImagesTool from "@/components/tools/docker-images-tool";
 
@@ -61,7 +60,6 @@ export default function ToolPage({ params }: { params: Promise<{ tool: string }>
     case "databases": return <DatabasesTool {...toolProps} />;
     case "backups": return <BackupsTool {...toolProps} />;
     case "security": return <SecurityTool {...toolProps} />;
-    case "shellai": return <ShellAITool {...toolProps} />;
     case "dns": return <DnsTool {...toolProps} />;
     case "docker-images": return <DockerImagesTool {...toolProps} />;
     default: return <EmptyState icon={Wrench} title="Unknown tool" description={`Tool "${toolId}" not found`} />;

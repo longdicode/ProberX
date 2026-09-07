@@ -22,6 +22,9 @@ import { toolsRoutes } from "./routes/tools";
 import { appStoreRoutes } from "./routes/app-store";
 import { mcpRoutes } from "./routes/mcp";
 import { inspectionRoutes } from "./routes/inspections";
+import { diagnosisRoutes } from "./routes/diagnoses";
+import { agentChatRoutes } from "./routes/agent-chat";
+import { workflowRoutes } from "./routes/workflows";
 import { wsPlugin } from "./ws/index";
 import { startMetricsPoller, stopMetricsPoller } from "./services/metrics-poller";
 import { startProbePoller, stopProbePoller } from "./services/probe-poller";
@@ -89,6 +92,9 @@ async function start() {
   // MCP (Model Context Protocol) for AI agent integration
   await app.register(mcpRoutes, { prefix: "/api/v1" });
   await app.register(inspectionRoutes, { prefix: "/api/v1" });
+await app.register(diagnosisRoutes, { prefix: "/api/v1" });
+await app.register(agentChatRoutes, { prefix: "/api/v1" });
+await app.register(workflowRoutes, { prefix: "/api/v1" });
 
   // WebSocket
   await app.register(wsPlugin, { prefix: "/ws" });

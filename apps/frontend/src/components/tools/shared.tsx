@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ServerStatusBadge } from "@/components/servers/server-status-badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Server } from "@/hooks/use-api";
-import { ArrowLeft, Wrench, Settings, Shield, FileText, Package, Globe, Rocket, Store, Database, HardDrive, ShieldAlert, Terminal, Server as ServerIcon, Globe as GlobeIcon, Container } from "lucide-react";
+import { ArrowLeft, Wrench, Settings, Shield, FileText, Package, Globe, Rocket, Store, Database, HardDrive, ShieldAlert, Server as ServerIcon, Globe as GlobeIcon, Container } from "lucide-react";
 
 export const toolMeta: Record<string, { titleKey: string; icon: typeof Wrench }> = {
   systemd: { titleKey: "tools.systemdTitle", icon: Settings },
@@ -19,7 +19,6 @@ export const toolMeta: Record<string, { titleKey: string; icon: typeof Wrench }>
   databases: { titleKey: "tools.databasesTitle", icon: Database },
   backups: { titleKey: "tools.backupsTitle", icon: HardDrive },
   security: { titleKey: "tools.securityTitle", icon: ShieldAlert },
-  shellai: { titleKey: "tools.shellaiTitle", icon: Terminal },
   dns: { titleKey: "tools.dnsTitle", icon: GlobeIcon },
   "docker-images": { titleKey: "tools.dockerImagesTitle", icon: Container },
 };

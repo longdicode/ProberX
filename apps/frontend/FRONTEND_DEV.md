@@ -91,8 +91,6 @@ apps/frontend/
 ├── next.config.ts
 ├── package.json
 ├── tsconfig.json
-├── AGENTS.md                          # Next.js 16 注意事项
-├── CLAUDE.md
 ├── FRONTEND_DEV.md                    # 本文档
 └── src/
     ├── app/                           # Next.js App Router (路由文件)

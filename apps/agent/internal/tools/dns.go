@@ -15,7 +15,7 @@ import (
 
 const dnsConfigPath = "/opt/proberx/dns-config.json"
 
-// ── Provider interface ──────────────────────────────────────────────
+// Provider interface
 
 // DNSProvider defines the interface for DNS management providers.
 type DNSProvider interface {
@@ -26,7 +26,7 @@ type DNSProvider interface {
 	DeleteRecord(zoneId, recordId string) error
 }
 
-// ── Config persistence ──────────────────────────────────────────────
+// Config persistence
 
 func loadDNSConfig() (DNSConfig, error) {
 	var cfg DNSConfig
@@ -116,7 +116,7 @@ func newProviderFromType(provider, apiKey, apiSecret string) DNSProvider {
 	}
 }
 
-// ── HTTP helper ─────────────────────────────────────────────────────
+// HTTP helper
 
 func doJSONRequest(method, url string, headers map[string]string, body interface{}) ([]byte, error) {
 	var reqBody io.Reader
@@ -157,7 +157,7 @@ func doJSONRequest(method, url string, headers map[string]string, body interface
 	return respBody, nil
 }
 
-// ── Cloudflare Provider ─────────────────────────────────────────────
+// Cloudflare Provider
 
 type CloudflareProvider struct {
 	apiKey string
@@ -327,7 +327,7 @@ func (p *CloudflareProvider) DeleteRecord(zoneId, recordId string) error {
 	return err
 }
 
-// ── DNSPod Provider ─────────────────────────────────────────────────
+// DNSPod Provider
 
 type DNSPodProvider struct {
 	apiKey string
@@ -547,7 +547,7 @@ func (p *DNSPodProvider) DeleteRecord(zoneId, recordId string) error {
 	return err
 }
 
-// ── GoDaddy Provider ────────────────────────────────────────────────
+// GoDaddy Provider
 
 type GoDaddyProvider struct {
 	apiKey    string
@@ -690,7 +690,7 @@ func (p *GoDaddyProvider) DeleteRecord(zoneId, recordId string) error {
 	return err
 }
 
-// ── Vercel DNS Provider ─────────────────────────────────────────────
+// Vercel DNS Provider
 
 type VercelDNSProvider struct {
 	apiKey string
@@ -837,7 +837,7 @@ func (p *VercelDNSProvider) DeleteRecord(zoneId, recordId string) error {
 	return err
 }
 
-// ── DigitalOcean DNS Provider ───────────────────────────────────────
+// DigitalOcean DNS Provider
 
 type DigitalOceanDNSProvider struct {
 	apiKey string

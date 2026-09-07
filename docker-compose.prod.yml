@@ -50,6 +50,9 @@ services:
       LLM_API_URL: ${LLM_API_URL:-http://host.docker.internal:11434/v1}
       LLM_MODEL: ${LLM_MODEL:-proberx-coder}
       LLM_API_KEY: ${LLM_API_KEY:-}
+      EMBED_BASE_URL: ${EMBED_BASE_URL:-http://host.docker.internal:11434}
+      EMBED_MODEL: ${EMBED_MODEL:-bge-m3}
+      EMBED_ENABLED: ${EMBED_ENABLED:-true}
       PDF_FONT_PATH: ${PDF_FONT_PATH:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -82,4 +85,3 @@ services:
 volumes:
   pgdata:
   redisdata:
-

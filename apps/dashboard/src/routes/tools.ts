@@ -4,7 +4,7 @@ import * as svc from "../services/tools.service";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AuthCtx = { preHandler: any[] };
 
-// ── Route builders ────────────────────────────────────────────────
+// Route builders
 
 /** GET with query parsing */
 function getRoute<T>(
@@ -39,7 +39,7 @@ function delRoute<T>(
   });
 }
 
-// ── Route definitions ─────────────────────────────────────────────
+// Route definitions
 
 export const toolsRoutes: FastifyPluginAsync = async (app) => {
   const auth = { preHandler: [app.authenticate, app.guardWorkspace()] };

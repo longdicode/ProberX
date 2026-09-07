@@ -7,9 +7,12 @@ import { AppError } from "../utils/errors";
 import { chatComplete, extractJson } from "./llm-client";
 import { executeShellCommand } from "./tools.service";
 import { dispatchAlert } from "./notification-dispatcher";
+import { maybeStartAutoDiagnosis } from "./diagnosis.service";
 import type { DbClient } from "../db/index";
+import { indexMemory } from "./memory.service";
+import { resolveAiLlm } from "./ai-settings.service";
 
-// ── Types ────────────────────────────────────────────────────────
+// Types
 
 export interface InspectionFinding {
   level: "error" | "warning" | "info";
@@ -49,7 +52,7 @@ export interface CollectResult {
   liveOutput: string;
 }
 
-// ── Collection ───────────────────────────────────────────────────
+// Collection
 
 const LIVE_COMMAND = [
   "echo '===== df -h ====='; df -h",
@@ -87,8 +90,8 @@ async function collect(
       round(avg(disk_used::float / nullif(disk_total, 0) * 100))::int AS disk_avg_pct,
       round(max(disk_used::float / nullif(disk_total, 0) * 100))::int AS disk_max_pct,
       round(avg(load_1), 2) AS load1_avg,
-      round(sum(net_in_bytes)::float / 1048576)::int AS net_in_mb,
-      round(sum(net_out_bytes)::float / 1048576)::int AS net_out_mb,
+      round(greatest(0, max(net_in_bytes) - min(net_in_bytes))::float / 1048576)::int AS net_in_mb,
+      round(greatest(0, max(net_out_bytes) - min(net_out_bytes))::float / 1048576)::int AS net_out_mb,
       max(gpu_name) AS gpu_name,
       round(avg(gpu_util_percent))::int AS gpu_util_avg
     FROM metric_snapshots
@@ -172,7 +175,7 @@ async function collect(
   };
 }
 
-// ── LLM analysis ─────────────────────────────────────────────────
+// LLM analysis
 
 const SYSTEM_PROMPT = `你是 ProberX 平台的资深 Linux 运维专家，负责生成服务器健康巡检报告。
 根据提供的「历史指标摘要」「监控探测」「告警」「定时任务」「实时诊断」数据，只依据数据本身分析，严禁编造数值。
@@ -221,7 +224,7 @@ function buildUserPrompt(c: CollectResult, hours: number): string {
   return lines.join("\n");
 }
 
-// ── Report rendering ─────────────────────────────────────────────
+// Report rendering
 
 function renderMarkdown(c: CollectResult, report: InspectionJson): string {
   const l: string[] = [];
@@ -304,7 +307,7 @@ ${findingHtml}
 </body></html>`;
 }
 
-// ── Alert integration ────────────────────────────────────────────
+// Alert integration
 
 async function ensureInspectionRule(workspaceId: string, db: DbClient) {
   const [existing] = await db
@@ -350,12 +353,12 @@ async function pushFindings(workspaceId: string, serverId: string, report: Inspe
   });
 }
 
-// ── Core: generate a report ──────────────────────────────────────
+// Core: generate a report
 
 export async function generateReport(
   workspaceId: string,
   serverId: string,
-  opts: { title?: string; hours?: number; trigger?: "manual" | "schedule" },
+  opts: { title?: string; hours?: number; trigger?: "manual" | "schedule"; onProgress?: (p: { label: string; detail?: string; current: number; total: number }) => void },
   db: DbClient
 ) {
   const hours = Math.min(Math.max(opts.hours ?? 24, 1), 168);
@@ -366,6 +369,8 @@ export async function generateReport(
     .limit(1);
   if (!server) throw AppError.notFound("Server", serverId);
 
+  // AI 接口可配置到工作区设置；未启用时自动回退服务器环境变量
+  const llm = await resolveAiLlm(db, workspaceId);
   const reportId = crypto.randomUUID();
   await db.insert(inspectionReports).values({
     id: reportId,
@@ -378,9 +383,17 @@ export async function generateReport(
 
   try {
     const collected = await collect(workspaceId, serverId, db, hours);
+    opts.onProgress?.({ label: "AI 巡检 · 指标采集", detail: "已完成 24h 指标采集，进入 AI 分析", current: 2, total: 3 });
     const userPrompt = buildUserPrompt(collected, hours);
-    const raw = await chatComplete({ system: SYSTEM_PROMPT, user: userPrompt });
-    const parsed = extractJson<InspectionJson>(raw);
+    let raw = await chatComplete({ system: SYSTEM_PROMPT, user: userPrompt, apiUrl: llm.apiUrl, apiKey: llm.apiKey, model: llm.model, maxTokens: 8192, timeoutMs: 120_000 });
+    let parsed: InspectionJson;
+    try {
+      parsed = extractJson<InspectionJson>(raw);
+    } catch {
+      // retry once: DeepSeek occasionally truncates long output, breaking JSON
+      raw = await chatComplete({ system: SYSTEM_PROMPT + "\n再次强调：只输出一个完整合法的 JSON 对象，不要 Markdown，不要省略号。", user: userPrompt, apiUrl: llm.apiUrl, apiKey: llm.apiKey, model: llm.model, maxTokens: 8192, timeoutMs: 120_000 });
+      parsed = extractJson<InspectionJson>(raw);
+    }
     if (!Number.isFinite(parsed.health_score)) parsed.health_score = 60;
     parsed.health_score = Math.max(0, Math.min(100, Math.round(parsed.health_score)));
     if (!Array.isArray(parsed.findings)) parsed.findings = [];
@@ -406,6 +419,21 @@ export async function generateReport(
       console.error("[inspection] alert push failed:", (e as Error).message);
     });
 
+    await maybeStartAutoDiagnosis(workspaceId, serverId, parsed.findings, db).catch((e) => {
+      console.error("[inspection] auto diagnosis trigger failed:", (e as Error).message);
+    });
+
+    // 后台异步沉淀为可检索记忆（不阻塞响应）
+    void indexMemory(db, {
+      workspaceId,
+      serverId,
+      sourceType: "inspection",
+      sourceId: reportId,
+      title: (opts.title || `${server.name} 健康巡检报告`).slice(0, 200),
+      content: `健康评分：${parsed.health_score}/100\n总结：${(parsed.summary ?? "").slice(0, 900)}\n\n${(markdown ?? "").slice(0, 3200)}`,
+    });
+
+    opts.onProgress?.({ label: "AI 巡检", detail: "正在生成健康报告", current: 3, total: 3 });
     return { id: reportId, status: "done" as const, healthScore: parsed.health_score };
   } catch (err) {
     const message = (err as Error).message;
@@ -417,7 +445,7 @@ export async function generateReport(
   }
 }
 
-// ── Queries ──────────────────────────────────────────────────────
+// Queries
 
 export async function listReports(workspaceId: string, db: DbClient, limit = 50, serverId?: string) {
   const conds = [eq(inspectionReports.workspaceId, workspaceId)];

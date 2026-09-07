@@ -18,7 +18,7 @@ frp/
 # Claude AI
 .claude/
 
-# ¹ÙÍøÔ´Âë²»Èë¿â
+# å®˜ç½‘æºç ä¸å…¥ GitHubï¼ˆç§æœ‰ï¼‰
 /apps/website/
 
 # Sync/merge artifacts & backups
@@ -35,3 +35,13 @@ apps/telegram-bot/data/
 settings_b64.txt
 seed40.sql
 hello.obj
+# AI agent instruction files (not product source)
+apps/frontend/CLAUDE.md
+apps/frontend/AGENTS.md
+# Dev/AI workflow scratch scripts (not product source)
+/_dev_tmp/
+
+# Scratch debug scripts (root + dashboard)
+.tmp_*.py
+.tmp_*.ts
+.tmp_uni.js

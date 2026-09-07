@@ -7,7 +7,7 @@ import { useUiStore } from "@/stores/ui-store";
 import { useLocale } from "@/stores/locale-store";
 import {
   LayoutDashboard, Server, Eye, Bell, Timer, Shield, Wrench, Settings,
-  ChevronLeft, ChevronRight, Radio, Terminal, FileText,
+  ChevronLeft, ChevronRight, Radio, Bot,
 } from "lucide-react";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
@@ -17,7 +17,7 @@ export function Sidebar() {
   const { sidebarOpen, sidebarCollapsed, setSidebarCollapsed } = useUiStore();
   const { t } = useLocale();
 
-  const navItems = [
+  const navMain = [
     { href: "/overview", label: t("nav.overview"), icon: LayoutDashboard },
     { href: "/servers", label: t("nav.servers"), icon: Server },
     { href: "/monitors", label: t("nav.monitors"), icon: Eye },
@@ -25,10 +25,25 @@ export function Sidebar() {
     { href: "/tasks", label: t("nav.tasks"), icon: Timer },
     { href: "/firewall", label: t("nav.firewall"), icon: Shield },
     { href: "/tools", label: t("nav.tools"), icon: Wrench },
-    { href: "/ai-terminal", label: t("nav.aiTerminal"), icon: Terminal },
-    { href: "/inspections", label: t("nav.inspections"), icon: FileText },
     { href: "/settings", label: t("nav.settings"), icon: Settings },
   ];
+  const navAgent = [
+    { href: "/agent", label: t("nav.agent"), icon: Bot },
+  ];
+  const renderNavItem = ({ href, label, icon: Icon }: { href: string; label: string; icon: typeof LayoutDashboard }) => {
+    const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
+    return (
+      <Link key={href} href={href} className={cn(
+        "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+        sidebarCollapsed && "justify-center px-2",
+        isActive ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+          : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+      )} title={sidebarCollapsed ? label : undefined}>
+        <Icon className="w-5 h-5 shrink-0" />
+        {!sidebarCollapsed && <span>{label}</span>}
+      </Link>
+    );
+  };
   if (!sidebarOpen) return null;
 
   return (
@@ -47,20 +62,13 @@ export function Sidebar() {
       {!sidebarCollapsed && <WorkspaceSwitcher />}
 
       <nav className="flex-1 px-2 py-3 space-y-1 overflow-y-auto">
-        {navItems.map(({ href, label, icon: Icon }) => {
-          const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
-          return (
-            <Link key={href} href={href} className={cn(
-              "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
-              sidebarCollapsed && "justify-center px-2",
-              isActive ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                : "text-sidebar-foreground hover:bg-sidebar-accent/50"
-            )} title={sidebarCollapsed ? label : undefined}>
-              <Icon className="w-5 h-5 shrink-0" />
-              {!sidebarCollapsed && <span>{label}</span>}
-            </Link>
-          );
-        })}
+        {navMain.map(renderNavItem)}
+        {!sidebarCollapsed && (
+          <p className="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            {t("nav.agent")}
+          </p>
+        )}
+        {navAgent.map(renderNavItem)}
       </nav>
 
       {!sidebarCollapsed && (

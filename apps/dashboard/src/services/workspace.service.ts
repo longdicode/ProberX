@@ -9,9 +9,10 @@ import { metricSnapshots } from "../db/schema/metric-snapshots";
 import { AppError } from "../utils/errors";
 import type { DbClient } from "../db/index";
 import type { CreateWorkspaceInput, UpdateWorkspaceInput } from "../validators/workspace";
+import { redactAiKey } from "./ai-settings.service";
 
 export async function list(userId: string, db: DbClient) {
-  return db.select({
+  const rows = await db.select({
     id: workspaces.id,
     name: workspaces.name,
     plan: workspaces.plan,
@@ -22,6 +23,8 @@ export async function list(userId: string, db: DbClient) {
     .innerJoin(memberships, eq(workspaces.id, memberships.workspaceId))
     .where(eq(memberships.userId, userId))
     .orderBy(workspaces.createdAt);
+  // AI 配置中的 apiKey 只存服务端，不回传客户端
+  return rows.map((row) => ({ ...row, settings: redactAiKey(row.settings) }));
 }
 
 export async function create(userId: string, input: CreateWorkspaceInput, db: DbClient) {
@@ -43,7 +46,7 @@ export async function getById(userId: string, workspaceId: string, db: DbClient)
     .where(and(eq(workspaces.id, workspaceId), eq(memberships.userId, userId)))
     .limit(1);
   if (!ws) throw AppError.notFound("Workspace", workspaceId);
-  return ws;
+  return { ...ws, settings: redactAiKey(ws.settings) };
 }
 
 export async function update(userId: string, workspaceId: string, input: UpdateWorkspaceInput, db: DbClient) {
@@ -52,7 +55,7 @@ export async function update(userId: string, workspaceId: string, input: UpdateW
     .set({ name: input.name ?? undefined, plan: input.plan, settings: input.settings as Record<string, unknown> | undefined, updatedAt: new Date() })
     .where(eq(workspaces.id, workspaceId))
     .returning();
-  return updated;
+  return { ...updated, settings: redactAiKey(updated.settings) };
 }
 
 export async function remove(userId: string, workspaceId: string, db: DbClient) {
@@ -107,11 +110,11 @@ export async function getDashboardStats(workspaceId: string, db: DbClient) {
 
 export async function getAlertTrends(workspaceId: string, range: string, db: DbClient) {
   const intervals: Record<string, string> = {
-    "24h": "1 hour",
-    "7d": "1 day",
-    "30d": "1 day",
+    "24h": "hour",
+    "7d": "day",
+    "30d": "day",
   };
-  const bucket = intervals[range] || "1 day";
+  const bucket = intervals[range] || "day";
   const since = range === "24h" ? "INTERVAL '24 hours'" : range === "7d" ? "INTERVAL '7 days'" : "INTERVAL '30 days'";
 
   const result = await db.execute(sql`

@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, Download, FileCode2, FileText, FileType, AlertTriangle, Info as InfoIcon, ExternalLink } from "lucide-react";
+import { ArrowLeft, Loader2, Download, FileCode2, FileText, FileType, AlertTriangle, Info as InfoIcon, ExternalLink, Workflow, ArrowRight } from "lucide-react";
 import { PageSkeleton } from "@/components/shared/loading-skeleton";
 import { useLocale } from "@/stores/locale-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useInspectionReport, type InspectionFinding } from "@/hooks/use-api";
+import { useInspectionReport, type InspectionFinding, type DiagnosisRun } from "@/hooks/use-api";
+import { api } from "@/lib/api-client";
 import { getToken } from "@/lib/auth";
 import { API_BASE_URL } from "@/lib/constants";
 import { toast } from "sonner";
@@ -66,6 +67,31 @@ export default function InspectionDetailPage() {
   const { current } = useWorkspaceStore();
   const { data: report, isLoading } = useInspectionReport(current?.id, params.id);
   const [exporting, setExporting] = useState<string | null>(null);
+  const [autoDiagnoses, setAutoDiagnoses] = useState<DiagnosisRun[] | null>(null);
+
+  // 编排联动：展示本份巡检触发后自动发起的“自主排查”（多智能体编排轨迹）
+  useEffect(() => {
+    if (!current?.id || !report?.serverId || report.status !== "done") {
+      setAutoDiagnoses(null);
+      return;
+    }
+    const baseTime = report.finishedAt
+      ? Date.parse(report.finishedAt)
+      : report.createdAt
+        ? Date.parse(report.createdAt)
+        : Date.now();
+    api
+      .get<DiagnosisRun[]>(`/workspaces/${current.id}/servers/${report.serverId}/diagnoses`)
+      .then((runs) => {
+        const arr = Array.isArray(runs) ? runs : [];
+        setAutoDiagnoses(
+          arr
+            .filter((r) => r.trigger === "auto" && Date.parse(r.createdAt) >= baseTime - 60_000)
+            .slice(0, 5)
+        );
+      })
+      .catch(() => setAutoDiagnoses([]));
+  }, [current?.id, report?.serverId, report?.status, report?.finishedAt, report?.createdAt]);
 
   async function download(kind: "html" | "markdown" | "pdf" | "docx") {
     if (!current?.id || !report) return;
@@ -137,6 +163,35 @@ export default function InspectionDetailPage() {
           </Button>
         </div>
       </div>
+
+      {autoDiagnoses && autoDiagnoses.length > 0 && (
+        <Card className="border-violet-500/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Workflow className="h-4 w-4 text-violet-400" />智能编排：巡检触发后的自动排查
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {autoDiagnoses.map((r) => (
+              <Link
+                key={r.id}
+                href={`/diagnoses/${r.id}`}
+                className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-3 hover:border-violet-500/40 transition-colors"
+              >
+                <Workflow className="h-4 w-4 text-violet-400" />
+                <span className="text-sm font-medium">自主排查</span>
+                <Badge variant="outline" className="text-xs">{r.status === "success" ? "已完成" : r.status === "running" ? "进行中" : r.status}</Badge>
+                {r.rootCause && <span className="text-xs text-muted-foreground flex-1 min-w-0 truncate">{r.rootCause}</span>}
+                <span className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString("zh-CN")}</span>
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+              </Link>
+            ))}
+            <p className="text-xs text-muted-foreground">
+              巡检发现异常后自动触发多步只读取证定位根因，形成“巡检 → 排查 → 修复/复检”的闭环编排。
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {report.status === "running" && (
         <Card className="border-blue-500/30">

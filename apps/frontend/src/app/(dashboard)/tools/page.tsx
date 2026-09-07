@@ -10,7 +10,7 @@ import { useLocale } from "@/stores/locale-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaces, useServers } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
-import { Wrench, Settings, Shield, FileText, Package, Globe, Rocket, Database, HardDrive, ShieldAlert, Terminal, Store, Globe as GlobeIcon, Container } from "lucide-react";
+import { Wrench, Settings, Shield, FileText, Package, Globe, Rocket, Database, HardDrive, ShieldAlert, Store, Globe as GlobeIcon, Container } from "lucide-react";
 
 const toolCards = [
   { id: "systemd", titleKey: "tools.systemdTitle", descKey: "tools.systemdDesc", icon: Settings },
@@ -22,7 +22,6 @@ const toolCards = [
   { id: "databases", titleKey: "tools.databasesTitle", descKey: "tools.databasesDesc", icon: Database },
   { id: "backups", titleKey: "tools.backupsTitle", descKey: "tools.backupsDesc", icon: HardDrive },
   { id: "security", titleKey: "tools.securityTitle", descKey: "tools.securityDesc", icon: ShieldAlert },
-  { id: "shellai", titleKey: "tools.shellaiTitle", descKey: "tools.shellaiDesc", icon: Terminal },
   { id: "dns", titleKey: "tools.dnsTitle", descKey: "tools.dnsDesc", icon: GlobeIcon },
   { id: "docker-images", titleKey: "tools.dockerImagesTitle", descKey: "tools.dockerImagesDesc", icon: Container },
 ];

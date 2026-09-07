@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -119,12 +120,14 @@ function truncate(text: string, max: number) {
 }
 
 export default function AiTerminalPage() {
+  const pathname = usePathname();
+  const pureTerminal = pathname?.startsWith("/terminal") ?? false;
   const { t } = useLocale();
   const { current } = useWorkspaceStore();
   const { data: servers } = useServers(current?.id);
   const [selectedServer, setSelectedServer] = useState("");
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<"ai" | "cmd">("ai");
+  const [mode, setMode] = useState<"ai" | "cmd">(pureTerminal ? "cmd" : "ai");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [cfgProvider, setCfgProvider] = useState("proberx");
@@ -464,30 +467,6 @@ export default function AiTerminalPage() {
               "focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10"
             )}
           >
-            <div className="flex shrink-0 items-center gap-1 rounded-xl bg-muted/80 p-1">
-              <button
-                type="button"
-                onClick={() => setMode("ai")}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
-                  mode === "ai" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Sparkles className="size-3.5" />
-                AI
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("cmd")}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
-                  mode === "cmd" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Terminal className="size-3.5" />
-                命令
-              </button>
-            </div>
             {currentServer && (
               <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                 <span className="size-1.5 rounded-full bg-emerald-400" />

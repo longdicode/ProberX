@@ -14,7 +14,7 @@ import * as statusPageSvc from "../services/status-page.service";
 import * as dockerSvc from "../services/docker.service";
 import { metricsQuery } from "../validators/common";
 
-// ── JSON-RPC 2.0 types ──
+// JSON-RPC 2.0 types
 
 interface JsonRpcRequest {
   jsonrpc: "2.0";
@@ -33,9 +33,9 @@ interface ToolDefinition {
   };
 }
 
-// ── Tools ──
+// Tools
 
-const TOOLS: ToolDefinition[] = [
+export const MCP_TOOLS: ToolDefinition[] = [
   { name: "list_servers", description: "列出工作空间所有服务器，含在线状态、IP、主机名、操作系统。", inputSchema: { type: "object", properties: {}, required: [] } },
   { name: "get_server_metrics", description: "获取指定服务器的 CPU、内存、磁盘、网络历史指标。", inputSchema: { type: "object", properties: { server_id: { type: "string", description: "服务器 UUID" }, range: { type: "string", description: "时间范围", enum: ["1h", "6h", "24h", "7d"] } }, required: ["server_id"] } },
   { name: "get_server_processes", description: "列出服务器上的运行进程。", inputSchema: { type: "object", properties: { server_id: { type: "string" } }, required: ["server_id"] } },
@@ -56,7 +56,7 @@ const TOOLS: ToolDefinition[] = [
   { name: "get_dashboard_health", description: "检查 Dashboard 健康状态。", inputSchema: { type: "object", properties: {}, required: [] } },
 ];
 
-// ── Auto-detect workspace for a user ──
+// Auto-detect workspace for a user
 
 async function resolveWid(userId: string, db: any): Promise<string> {
   // Get the users most recently joined workspace
@@ -69,7 +69,7 @@ async function resolveWid(userId: string, db: any): Promise<string> {
   return m.workspaceId;
 }
 
-// ── Route ──
+// Route
 
 export const mcpRoutes: FastifyPluginAsync = async (app) => {
   app.post("/mcp", async (req: FastifyRequest, reply: FastifyReply) => {
@@ -122,12 +122,12 @@ export const mcpRoutes: FastifyPluginAsync = async (app) => {
   });
 };
 
-// ── Dispatch ──
+// Dispatch
 
 async function dispatch(method: string, params: unknown, wid: string, db: any): Promise<unknown> {
   switch (method) {
     case "tools/list":
-      return { tools: TOOLS };
+      return { tools: MCP_TOOLS };
 
     case "tools/call": {
       const p = params as { name: string; arguments?: Record<string, unknown> };
@@ -143,9 +143,9 @@ async function dispatch(method: string, params: unknown, wid: string, db: any): 
   }
 }
 
-// ── Tool handlers ──
+// Tool handlers
 
-async function callTool(name: string, args: Record<string, unknown>, wid: string, db: any): Promise<unknown> {
+export async function callTool(name: string, args: Record<string, unknown>, wid: string, db: any): Promise<unknown> {
   const sid = args.server_id as string;
 
   switch (name) {

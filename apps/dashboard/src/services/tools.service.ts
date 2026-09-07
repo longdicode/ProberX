@@ -2,7 +2,7 @@ import { getById } from "./server.service";
 import { AppError } from "../utils/errors";
 import type { DbClient } from "../db/index";
 
-// ── Agent resolution ──────────────────────────────────────────────
+// Agent resolution
 
 async function resolveAgent(workspaceId: string, serverId: string, db: DbClient) {
   const server = await getById(workspaceId, serverId, db);
@@ -22,7 +22,7 @@ async function throwAgentError(res: Response): Promise<never> {
   throw AppError.badRequest(msg);
 }
 
-// ── Core agent fetch helper ───────────────────────────────────────
+// Core agent fetch helper
 
 type AgentFetchOpts = {
   method?: string;
@@ -57,7 +57,7 @@ async function agentFetch<T = any>(
   return res.json() as T;
 }
 
-// ── Convenience aliases ───────────────────────────────────────────
+// Convenience aliases
 
 const GET = <T>(wid: string, sid: string, path: string, opts: Omit<AgentFetchOpts, "method"> = {}, db: DbClient) =>
   agentFetch<T>(wid, sid, path, { ...opts, method: "GET" }, db);
@@ -71,7 +71,7 @@ const DELETE = <T>(wid: string, sid: string, path: string, opts: Omit<AgentFetch
 const PUT = <T>(wid: string, sid: string, path: string, opts: Omit<AgentFetchOpts, "method"> = {}, db: DbClient) =>
   agentFetch<T>(wid, sid, path, { ...opts, method: "PUT" }, db);
 
-// ── systemd ───────────────────────────────────────────────────────
+// systemd
 
 export const listServices = (wid: string, sid: string, db: DbClient) =>
   GET(wid, sid, "/tools/services", {}, db);
@@ -82,7 +82,7 @@ export const controlService = (wid: string, sid: string, body: { name: string; a
 export const serviceStatus = (wid: string, sid: string, name: string, db: DbClient) =>
   GET(wid, sid, `/tools/services/${encodeURIComponent(name)}`, {}, db);
 
-// ── SSL ───────────────────────────────────────────────────────────
+// SSL
 
 export const checkSSL = (wid: string, sid: string, body: { domain: string }, db: DbClient) =>
   POST(wid, sid, "/tools/ssl", { body, timeout: 15_000 }, db);
@@ -96,7 +96,7 @@ export const renewSSL = (wid: string, sid: string, body: { domain: string }, db:
 export const listSSLCerts = (wid: string, sid: string, db: DbClient) =>
   GET(wid, sid, "/tools/ssl/certs", {}, db);
 
-// ── Logs ──────────────────────────────────────────────────────────
+// Logs
 
 export const fetchLogs = (wid: string, sid: string, params: { unit?: string; lines?: number; since?: string }, db: DbClient) =>
   GET(wid, sid, "/tools/logs", { params: params as unknown as Record<string, string> }, db);
@@ -104,7 +104,7 @@ export const fetchLogs = (wid: string, sid: string, params: { unit?: string; lin
 export const fetchLogFile = (wid: string, sid: string, params: { path: string; lines?: number }, db: DbClient) =>
   GET(wid, sid, "/tools/logs/file", { params: params as unknown as Record<string, string> }, db);
 
-// ── Packages ──────────────────────────────────────────────────────
+// Packages
 
 export const listPackages = (wid: string, sid: string, upgradableOnly: boolean, db: DbClient) =>
   GET(wid, sid, "/tools/packages", { params: { upgradable: String(upgradableOnly) }, timeout: 15_000 }, db);
@@ -112,7 +112,7 @@ export const listPackages = (wid: string, sid: string, upgradableOnly: boolean, 
 export const upgradePackages = (wid: string, sid: string, db: DbClient) =>
   POST(wid, sid, "/tools/packages", { timeout: 120_000 }, db);
 
-// ── Nginx ─────────────────────────────────────────────────────────
+// Nginx
 
 export const nginxStatus = (wid: string, sid: string, db: DbClient) =>
   GET(wid, sid, "/tools/nginx", {}, db);
@@ -132,7 +132,7 @@ export const createVHost = (wid: string, sid: string, body: { domain: string; ta
 export const deleteVHost = (wid: string, sid: string, body: { domain: string }, db: DbClient) =>
   DELETE(wid, sid, "/tools/nginx/vhosts", { body, timeout: 15_000 }, db);
 
-// ── Deploy ────────────────────────────────────────────────────────
+// Deploy
 
 export const listDeployTemplates = (wid: string, sid: string, db: DbClient) =>
   GET(wid, sid, "/tools/deploy/templates", {}, db);
@@ -164,7 +164,7 @@ export const updateDeployment = (wid: string, sid: string, body: { appName: stri
 export const getDeployProgress = (wid: string, sid: string, appName: string, db: DbClient) =>
   GET<{ logs: string }>(wid, sid, "/tools/deploy/progress", { params: { appName }, timeout: 5_000 }, db);
 
-// ── Databases ─────────────────────────────────────────────────────
+// Databases
 
 export const listDatabases = (wid: string, sid: string, db: DbClient) =>
   GET(wid, sid, "/tools/databases", {}, db);
@@ -178,7 +178,7 @@ export const removeDatabase = (wid: string, sid: string, body: { type: string },
 export const checkPorts = (wid: string, sid: string, body: { ports: string[] }, db: DbClient) =>
   POST<Record<string, boolean>>(wid, sid, "/tools/deploy/check-ports", { body }, db);
 
-// ── Backups ───────────────────────────────────────────────────────
+// Backups
 
 export const listBackups = (wid: string, sid: string, db: DbClient) =>
   GET(wid, sid, "/tools/backups", {}, db);
@@ -195,7 +195,7 @@ export const deleteBackup = (wid: string, sid: string, body: { name: string }, d
 export const restoreBackup = (wid: string, sid: string, body: { name: string }, db: DbClient) =>
   POST(wid, sid, "/tools/backups/restore", { body, timeout: 120_000 }, db);
 
-// ── Cloud Backups ──────────────────────────────────────────────────
+// Cloud Backups
 
 export const getCloudConfig = (wid: string, sid: string, db: DbClient) =>
   GET(wid, sid, "/tools/backups/cloud-config", {}, db);
@@ -224,7 +224,7 @@ export const cleanupCloudBackups = (wid: string, sid: string, body: { retention_
 export const testCloudConnection = (wid: string, sid: string, db: DbClient) =>
   POST<{ status: string }>(wid, sid, "/tools/backups/cloud/test", { timeout: 15_000 }, db);
 
-// ── Security ──────────────────────────────────────────────────────
+// Security
 
 export const auditSSH = (wid: string, sid: string, db: DbClient) =>
   GET(wid, sid, "/tools/security/ssh", {}, db);
@@ -241,7 +241,7 @@ export const fail2banUnban = (wid: string, sid: string, body: { jail?: string; i
 export const fail2banBan = (wid: string, sid: string, body: { jail?: string; ip: string }, db: DbClient) =>
   POST(wid, sid, "/tools/security/fail2ban/ban", { body }, db);
 
-// ── Shell AI ──────────────────────────────────────────────────────
+// Shell AI
 
 export const generateShellCommand = (wid: string, sid: string, body: { prompt: string; provider: string; model?: string; api_key?: string; api_url?: string }, db: DbClient) =>
   POST<{ command: string; explanation?: string }>(wid, sid, "/tools/shell-ai/generate", { body, timeout: 300_000 }, db);
@@ -255,7 +255,7 @@ export const saveShellAIConfig = (wid: string, sid: string, body: { provider: st
 export const executeShellCommand = (wid: string, sid: string, body: { command: string; timeout?: number }, db: DbClient) =>
   POST<{ stdout: string; stderr: string; exit_code: number }>(wid, sid, "/tools/shell-ai/execute", { body, timeout: 60_000 }, db);
 
-// ── Docker Images ──────────────────────────────────────────────────
+// Docker Images
 
 export const listImages = (wid: string, sid: string, db: DbClient) =>
   GET(wid, sid, "/images", {}, db);
@@ -272,7 +272,7 @@ export const inspectImage = (wid: string, sid: string, imageId: string, db: DbCl
 export const pruneImages = (wid: string, sid: string, db: DbClient) =>
   POST(wid, sid, "/images/prune", { timeout: 60_000 }, db);
 
-// ── DNS ────────────────────────────────────────────────────────────
+// DNS
 
 export const listDNSProviders = (wid: string, sid: string, db: DbClient) =>
   GET<string[]>(wid, sid, "/tools/dns/providers", {}, db);

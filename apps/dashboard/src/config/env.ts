@@ -13,6 +13,9 @@ const envSchema = z.object({
   LLM_API_URL: z.string().default("http://127.0.0.1:11434/v1"),
   LLM_MODEL: z.string().default("proberx-coder"),
   LLM_API_KEY: z.string().default(""),
+  EMBED_BASE_URL: z.string().default("http://host.docker.internal:11434"),
+  EMBED_MODEL: z.string().default("bge-m3"),
+  EMBED_ENABLED: z.coerce.boolean().default(true),
 });
 
 export type Env = z.infer<typeof envSchema>;

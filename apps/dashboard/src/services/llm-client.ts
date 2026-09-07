@@ -14,7 +14,7 @@ export interface ChatOptions {
 
 /**
  * Minimal OpenAI-compatible chat completion client.
- * Used by the AI inspection pipeline (defaults to the local Ollama model).
+ * DeepSeek occasionally returns an empty response, so we retry once.
  */
 export async function chatComplete(opts: ChatOptions): Promise<string> {
   const apiUrl = (opts.apiUrl || env.LLM_API_URL).replace(/\/$/, "") + "/chat/completions";
@@ -28,12 +28,26 @@ export async function chatComplete(opts: ChatOptions): Promise<string> {
       { role: "user", content: opts.user },
     ],
     temperature: opts.temperature ?? 0.2,
-    max_tokens: opts.maxTokens ?? 2048,
+    max_tokens: opts.maxTokens ?? 8192,
     stream: false,
   };
 
+  const content = await postOnce(apiUrl, body, apiKey, opts.timeoutMs ?? 180_000);
+  if (content) return content;
+
+  // retry once after a short delay
+  await new Promise((r) => setTimeout(r, 800));
+  return postOnce(apiUrl, body, apiKey, opts.timeoutMs ?? 180_000);
+}
+
+async function postOnce(
+  apiUrl: string,
+  body: Record<string, unknown>,
+  apiKey: string | undefined,
+  timeoutMs: number
+): Promise<string> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 180_000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(apiUrl, {
       method: "POST",
@@ -51,9 +65,7 @@ export async function chatComplete(opts: ChatOptions): Promise<string> {
     const data = (await res.json()) as {
       choices?: { message?: { content?: string } }[];
     };
-    const content = data.choices?.[0]?.message?.content?.trim();
-    if (!content) throw new Error("LLM returned empty response");
-    return content;
+    return data.choices?.[0]?.message?.content?.trim() ?? "";
   } finally {
     clearTimeout(timer);
   }

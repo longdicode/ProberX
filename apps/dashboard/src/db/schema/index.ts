@@ -13,3 +13,5 @@ export { cronExecutions } from "./cron-executions";
 export { statusPages } from "./status-pages";
 export { apiKeys } from "./api-keys";
 export { appStoreEntries } from "./app-store";
+export { workflows } from "./workflows";
+export { memoryDocs } from "./memory-docs";

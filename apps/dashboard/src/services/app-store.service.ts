@@ -88,7 +88,7 @@ export async function remove(workspaceId: string, entryId: string, db: DbClient)
     .where(and(eq(appStoreEntries.id, entryId), eq(appStoreEntries.workspaceId, workspaceId)));
 }
 
-// ── Seed data ──────────────────────────────────────────────────────
+// Seed data
 
 interface SeedEntry {
   name: string;
@@ -105,7 +105,7 @@ interface SeedEntry {
 }
 
 const seedData: SeedEntry[] = [
-  // ── DevOps (3) ──────────────────────────────────────────────
+  // DevOps (3)
   {
     name: "Nginx Proxy Manager",
     description: "Easy reverse proxy with SSL management. Expose your services with a few clicks.",
@@ -177,7 +177,7 @@ const seedData: SeedEntry[] = [
     restart: unless-stopped`,
   },
 
-  // ── CMS (5) ──────────────────────────────────────────────────
+  // CMS (5)
   {
     name: "WordPress",
     description: "The world's most popular CMS. Build beautiful websites with blocks, themes and plugins.",
@@ -337,7 +337,7 @@ const seedData: SeedEntry[] = [
     restart: unless-stopped`,
   },
 
-  // ── Monitoring (4) ───────────────────────────────────────────
+  // Monitoring (4)
   {
     name: "Uptime Kuma",
     description: "Fancy self-hosted uptime monitoring. Monitor HTTP(s), TCP, Ping, DNS and more.",
@@ -451,7 +451,7 @@ const seedData: SeedEntry[] = [
     restart: unless-stopped`,
   },
 
-  // ── Tools (4) ────────────────────────────────────────────────
+  // Tools (4)
   {
     name: "NocoDB",
     description: "Open-source Airtable alternative. Turns any database into a smart spreadsheet.",
@@ -552,7 +552,7 @@ const seedData: SeedEntry[] = [
     restart: unless-stopped`,
   },
 
-  // ── AI/IoT (1) ───────────────────────────────────────────────
+  // AI/IoT (1)
   {
     name: "Home Assistant",
     description: "Open-source home automation platform. Control lights, climate, media, and more.",
@@ -576,7 +576,7 @@ const seedData: SeedEntry[] = [
     restart: unless-stopped`,
   },
 
-  // ── Utility (1) ──────────────────────────────────────────────
+  // Utility (1)
   {
     name: "Changedetection",
     description: "Monitor web pages for changes. Get notified when content updates.",

@@ -259,7 +259,7 @@ class _ServerDetailPageState extends State<ServerDetailPage> {
           );
   }
 
-  // ── 头部 ──
+  // 头部
   Widget _header() {
     final s = widget.server;
     final online = s.online;
@@ -466,7 +466,7 @@ class _ServerDetailPageState extends State<ServerDetailPage> {
     );
   }
 
-  // ── KPI 行 ──
+  // KPI 行
   Widget _kpiRow() {
     final last = _points.last;
     final cpu = last.cpuPercent ?? 0;
@@ -585,7 +585,7 @@ class _ServerDetailPageState extends State<ServerDetailPage> {
     );
   }
 
-  // ── 图表 ──
+  // 图表
   List<FlSpot> get _cpuSpots => _points
       .where((p) => p.cpuPercent != null)
       .map(

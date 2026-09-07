@@ -440,3 +440,167 @@ export function useInspectionReport(workspaceId: string | undefined, reportId: s
     },
   });
 }
+
+// --- Autonomous Diagnosis ---
+  export interface DiagnosisStep {
+    index: number;
+    tool: string;
+    args: Record<string, unknown>;
+    reason: string;
+    command: string;
+    status: "running" | "done" | "error";
+    stdout: string;
+    stderr: string;
+    exitCode: number | null;
+    judgment: string;
+    startedAt: string;
+    finishedAt: string;
+    event?: { type?: string; label?: string; detail?: string } | null;
+  }
+
+export interface DiagnosisSuggestion {
+  title: string;
+  detail: string;
+}
+
+export interface DiagnosisSimilarCase {
+  id: string;
+  title: string;
+  goal: string;
+  rootCause: string | null;
+  confidence: number | null;
+  createdAt: string;
+  similarity: number;
+  repaired: boolean;
+  rechecked: boolean;
+}
+
+export interface DiagnosisRun {
+  id: string;
+  serverId: string | null;
+  title: string;
+  goal: string;
+  trigger: "manual" | "auto";
+  status: "running" | "success" | "failed" | "stopped";
+  steps: DiagnosisStep[];
+  rootCause: string | null;
+  confidence: number | null;
+  evidence: string | null;
+  conclusion: string | null;
+  suggestions: DiagnosisSuggestion[];
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  createdAt: string;
+  similarCases?: DiagnosisSimilarCase[];
+  evidenceFingerprint?: string | null;
+  evidenceVerified?: boolean | null;
+}
+
+export function useDiagnoses(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: ["diagnoses", workspaceId],
+    queryFn: () => api.get<DiagnosisRun[]>(`/workspaces/${workspaceId}/diagnoses`),
+    enabled: !!workspaceId,
+  });
+}
+
+export function useDiagnosis(workspaceId: string | undefined, runId: string | undefined) {
+  return useQuery({
+    queryKey: ["diagnosis", workspaceId, runId],
+    queryFn: () => api.get<DiagnosisRun>(`/workspaces/${workspaceId}/diagnoses/${runId}`),
+    enabled: !!workspaceId && !!runId,
+    refetchInterval: (query) => {
+      const status = (query.state.data as DiagnosisRun | undefined)?.status;
+      return status === "running" ? 4000 : false;
+    },
+  });
+}
+
+
+// --- Workflows ---
+export interface WorkflowStep {
+  id: string;
+  kind: "builtin" | "shell" | "mcp";
+  tool: string;
+  name?: string;
+  args?: Record<string, unknown>;
+}
+
+export interface Workflow {
+  id: string;
+  name: string;
+  description: string | null;
+  trigger: string | null;
+  steps: WorkflowStep[];
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkflowToolDef {
+  id: string;
+  name: string;
+  desc: string;
+  inputSchema?: {
+    type: "object";
+    properties: Record<string, { type: string; description?: string; enum?: string[] }>;
+    required?: string[];
+  };
+}
+
+export interface WorkflowCatalog {
+  builtin: WorkflowToolDef[];
+  mcp: WorkflowToolDef[];
+}
+
+export interface WorkflowRunStep {
+  id: string;
+  kind: WorkflowStep["kind"];
+  tool: string;
+  name: string;
+  status: "running" | "done" | "error";
+  output?: string;
+  exitCode?: number;
+  startedAt: number;
+  finishedAt?: number;
+}
+
+export interface WorkflowRun {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  status: "running" | "done" | "failed";
+  steps: WorkflowRunStep[];
+  text: string;
+  error?: string;
+  createdAt: number;
+}
+
+export function useWorkflows(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: ["workflows", workspaceId],
+    queryFn: () => api.get<Workflow[]>(`/workspaces/${workspaceId}/workflows`),
+    enabled: !!workspaceId,
+  });
+}
+
+export function useWorkflowCatalog(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: ["workflow-tools", workspaceId],
+    queryFn: () => api.get<WorkflowCatalog>(`/workspaces/${workspaceId}/workflow-tools`),
+    enabled: !!workspaceId,
+  });
+}
+
+export function useWorkflowRun(workspaceId: string | undefined, runId: string | undefined) {
+  return useQuery({
+    queryKey: ["workflow-run", workspaceId, runId],
+    queryFn: () => api.get<WorkflowRun>(`/workspaces/${workspaceId}/workflow-runs/${runId}`),
+    enabled: !!workspaceId && !!runId,
+    refetchInterval: (query) => {
+      const status = (query.state.data as WorkflowRun | undefined)?.status;
+      return status === "running" ? 1200 : false;
+    },
+  });
+}

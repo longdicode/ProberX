@@ -6,6 +6,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaces } from "@/hooks/use-api";
 import { WorkspaceForm } from "@/components/settings/workspace-form";
 import { ApiKeyManager } from "@/components/settings/api-key-manager";
+import { AiSettingsCard } from "@/components/settings/ai-settings-card";
 import { MemberManager } from "@/components/settings/member-manager";
 import { NotificationSettings } from "@/components/settings/notification-settings";
 
@@ -25,6 +26,7 @@ export default function SettingsPage() {
       </div>
 
       <WorkspaceForm />
+      {wid && <AiSettingsCard workspaceId={wid} />}
       {wid && <ApiKeyManager workspaceId={wid} />}
       {wid && <MemberManager workspaceId={wid} />}
       {wid && <NotificationSettings workspaceId={wid} />}

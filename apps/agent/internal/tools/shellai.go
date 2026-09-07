@@ -119,7 +119,7 @@ func callOpenAICompatAPI(req ShellAIGenerateRequest) (*ShellAIGenerateResponse, 
 			{"role": "system", "content": shellAISystemPrompt},
 			{"role": "user", "content": req.Prompt},
 		},
-		"max_tokens":  500,
+		"max_tokens":  8000,
 		"temperature": 0.1,
 	}
 	bodyBytes, _ := json.Marshal(body)
@@ -151,7 +151,8 @@ func callOpenAICompatAPI(req ShellAIGenerateRequest) (*ShellAIGenerateResponse, 
 	var result struct {
 		Choices []struct {
 			Message struct {
-				Content string `json:"content"`
+				Content          string `json:"content"`
+				ReasoningContent string `json:"reasoning_content"`
 			} `json:"message"`
 		} `json:"choices"`
 	}
@@ -163,14 +164,94 @@ func callOpenAICompatAPI(req ShellAIGenerateRequest) (*ShellAIGenerateResponse, 
 	}
 
 	content := strings.TrimSpace(result.Choices[0].Message.Content)
+	if content == "" {
+		content = extractCommandJSON(result.Choices[0].Message.ReasoningContent)
+	}
 	content = stripMarkdownCodeFence(content)
 
 	var gen ShellAIGenerateResponse
 	if err := json.Unmarshal([]byte(content), &gen); err != nil {
-		gen.Command = content
-		gen.Explanation = ""
+		// Tolerate a bare one-line command when the model skipped the JSON wrapper.
+		if looksLikeShellCommand(content) {
+			gen.Command = content
+			gen.Explanation = ""
+		} else {
+			return nil, fmt.Errorf("LLM did not return a valid command JSON")
+		}
+	}
+	if !validParsedCommand(gen.Command) {
+		return nil, fmt.Errorf("LLM returned an invalid command")
 	}
 	return &gen, nil
+}
+
+// validParsedCommand validates a command that was parsed from a JSON object.
+// It rejects prose, template placeholders (curl -w artifacts), and huge blobs.
+func validParsedCommand(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" || len(s) > 4096 || strings.Contains(s, "{url_") || strings.Contains(s, "%{") {
+		return false
+	}
+	for _, r := range s {
+		if r >= 0x4E00 && r <= 0x9FFF {
+			return false
+		}
+	}
+	return true
+}
+
+// extractCommandJSON scans text for JSON objects and returns the first one
+// that carries a non-empty "command" string field.
+func extractCommandJSON(text string) string {
+	for {
+		start := strings.IndexByte(text, '{')
+		if start == -1 {
+			return ""
+		}
+		depth := 0
+		end := -1
+		for i := start; i < len(text); i++ {
+			switch text[i] {
+			case '{':
+				depth++
+			case '}':
+				depth--
+				if depth == 0 {
+					end = i
+				}
+			}
+			if end != -1 {
+				break
+			}
+		}
+		if end == -1 {
+			return ""
+		}
+		candidate := text[start : end+1]
+		var probe struct {
+			Command string `json:"command"`
+		}
+		if err := json.Unmarshal([]byte(candidate), &probe); err == nil && validParsedCommand(probe.Command) {
+			return candidate
+		}
+		text = text[end+1:]
+	}
+}
+
+// looksLikeShellCommand reports whether s could be a bare shell command
+// (single line, ASCII only, no template placeholders) rather than LLM
+// prose, reasoning text, or curl write-out artifacts.
+func looksLikeShellCommand(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" || len(s) > 512 || strings.ContainsAny(s, "\n\r{}") {
+		return false
+	}
+	for _, r := range s {
+		if r >= 0x4E00 && r <= 0x9FFF {
+			return false
+		}
+	}
+	return true
 }
 
 func callClaudeAPI(req ShellAIGenerateRequest) (*ShellAIGenerateResponse, error) {
