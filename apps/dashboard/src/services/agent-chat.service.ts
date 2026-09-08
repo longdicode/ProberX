@@ -5,7 +5,7 @@ import { buildWeekly } from "./weekly.service";
 import { generateShellCommand, executeShellCommand } from "./tools.service";
 import * as workflowSvc from "./workflow.service";
 import { recallMemory, memorySourceLabel, indexMemory, latestMemoryByType } from "./memory.service";
-import { EXPERT_BY_ID, isExpertAgent, routeExpert } from "./expert-agents";
+import { EXPERT_BY_ID, isExpertAgent, routeExpert, matchExpertByName } from "./expert-agents";
 import type { ExpertAgentId } from "./expert-agents";
 import { resolveAiLlm } from "./ai-settings.service";
 import type { ResolvedAiLlm } from "./ai-settings.service";
@@ -390,12 +390,28 @@ export function routeIntent(
     return { agent: "weekly" };
   }
 
-  // 1.7) 专项诊断助手自动路由（12 个专家：网站/数据库/流量/安全/服务器/计划任务/文件/FTP/SSL/日志/DNS/性能）
+  // 1.54) 名词/错误码解释类提问（不带故障语境）交通用助手，避免误触发诊断
+  const pureMeaning =
+    (/(是什么意思|是什么|啥意思|指什么|是什么东西)/.test(m) || /^(什么是|啥是)/.test(m)) &&
+    !/(为什么|原因|怎么解决|怎么处理|怎么办|排查|怎么查|查一下|看看|我的|我们|本机|这台|服务器|网站|域名|故障|宕机|打不开|访问不了|挂了|超时|卡|慢|异常|报错|磁盘满|内存不足)/.test(m);
+  if (pureMeaning) return { agent: "assistant" };
+
+  // 1.55) 产品/能力咨询（“你能做什么/有哪些功能/介绍下XX”）不触发诊断或命令执行
+  if (/(介绍下?|功能介绍|能做什么|能做哪些|有哪些功能|你们能|你可以|你能|支持哪些|助手列表)/.test(m) &&
+      !/(报错|异常|打不开|无法访问|502|503|504|500|故障|宕机|优化|检查|看看|分析|扫描|磁盘满|内存不足|卡|慢|挂了)/.test(m)) {
+    return { agent: "assistant" };
+  }
+
+  // 1.6) 点名直呼专项助手（用/切换到/找 XX 助手）
+  const namedExpert = matchExpertByName(m);
+  if (namedExpert) return { agent: namedExpert };
+
+  // 1.7) 专项诊断助手自动路由（13 个专家：网站/数据库/流量/安全/后门扫描/服务器/计划任务/文件/FTP/SSL/日志/DNS/性能）
   const exp = routeExpert(m);
   if (exp) return { agent: exp };
 
   // 2) inspection / health check
-  if (/(巡检|体检|健康检查|健康评分|检查一下服务器|服务器健康|服务器怎么样|正常吗|是否正常)/.test(m)) {
+  if (/(巡检|体检|健康检查|健康评分|健康报告|健康状态|健康状况|健康度|健康吗|检查一下服务器|服务器健康|服务器怎么样|正常吗|是否正常|正常不)/.test(m)) {
     return { agent: "inspection" };
   }
 
@@ -409,7 +425,43 @@ export function routeIntent(
     return { agent: "terminal" };
   }
 
+  // 5) 运维实操兜底：对象词+动作词都明确时交给能取证的助手，避免纯聊天回复“无法执行”
+  const op = routeOperationalFallback(m);
+  if (op) return op;
+
   return { agent: "assistant" };
+}
+
+// 强运维意图识别：知识问答/闲聊不参与兜底
+const KNOWLEDGE_ASK = /^(什么是|啥是|是什么|解释一下|介绍一下|说明一下|有什么区别|怎么理解|工作原理|教程|哪个好|怎么选|如何安装|怎么用|用法|推荐|如何|怎么配置|怎么部署)/;
+const OPERATION_DOMAIN = /(https?:\/\/)?[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9])+/;
+const OPERATION_VERB = /(看看|看一下|查一下|查查|检查|排查|诊断|分析|检测|扫描|查看|查询|访问|监控|为什么|怎么回事|什么情况|咋了|怎么了|是否正常|正常吗|正不正常|打不开|访问不了|挂了|挂了吗|白屏|报错|异常|很慢|很卡|卡顿|连不上|失败|没反应|跑不起来|状态|原因)/;
+const OPERATION_OBJ = /(网站|站点|域名|网址|服务器|主机|服务|页面|接口|证书|数据库|mysql|redis|nginx|php|docker|容器|端口|进程|日志|磁盘|内存|cpu|负载|文件|任务|cron|ftp|dns|ssl|流量|带宽|备份|计划任务|定时任务|面板|宝塔|bt)/i;
+
+function routeOperationalFallback(m: string): RouteResult | null {
+  if (!m || m.length < 4) return null;
+  if (KNOWLEDGE_ASK.test(m)) return null;
+  const hasObj = OPERATION_OBJ.test(m) || OPERATION_DOMAIN.test(m);
+  if (!hasObj || !OPERATION_VERB.test(m)) return null;
+  if (OPERATION_DOMAIN.test(m) || /(网站|站点|域名|网址|页面|虚拟主机|首页)/i.test(m)) return { agent: "website-diag" };
+  return { agent: "diagnosis" };
+}
+
+// 连续追问：短句或承接语沿用上一轮可执行能力，避免掉回“纯聊天不执行”
+const FOLLOWUP_PREFIX = /^(那|那么|再|继续|然后|接着|还有|顺便|为啥|为什么|怎么会|结果|后面|之后|接下来|这个|那个|它|上面|所以|是不是|有没有)/;
+function continuePreviousAgent(
+  message: string,
+  history: { role: string; content: string }[],
+  workflows: { id: string; name: string; trigger: string | null; enabled: boolean }[]
+): AgentId | null {
+  const lastUser = [...(history ?? [])].reverse().find((h) => h.role === "user")?.content ?? "";
+  if (!lastUser) return null;
+  const prev = routeIntent(lastUser, workflows).agent;
+  if (!prev || prev === "assistant" || prev === "weekly" || prev === "inspection" || prev === "workflow") return null;
+  const m = (message ?? "").trim();
+  if (!m) return null;
+  if (m.length <= 12 || FOLLOWUP_PREFIX.test(m)) return prev;
+  return null;
 }
 
 // 把最近几轮对话整理成“仅用于理解连续问题意图”的上下文（不作为取证证据）
@@ -515,6 +567,11 @@ async function runAgentTask(task: AgentTask, input: AgentChatInput, db: DbClient
       // 显式点选（CAP_CARDS/专家助手）优先；未点选时按意图自动路由
       agent = input.agent ?? routed.agent;
       workflowId = input.workflowId ?? routed.workflowId;
+      // 连续追问：短句/承接语沿用上一轮可执行能力，避免掉回“纯聊天不执行”
+      if (!input.agent && !workflowId && routed.agent === "assistant" && history && history.length) {
+        const prev = continuePreviousAgent(message, history, wfs as any);
+        if (prev) agent = prev;
+      }
     }
     task.agent = agent ?? "assistant";
 

@@ -188,7 +188,7 @@ export const DIAGNOSIS_TOOLS: Record<string, { desc: string; build: ToolBuild }>
     },
   },
 
-  // ---- 专项诊断助手新增只读工具（12 个专项助手共用；全部参数化+白名单命令） ----
+  // ---- 专项诊断助手新增只读工具（13 个专项助手共用；全部参数化+白名单命令） ----
 
   mysql: {
     desc: "MySQL 只读诊断（白名单 SQL，无凭据自动尝试本机 socket），args: {sub: status|processlist|slow|schema, db?: 库名}",
@@ -372,6 +372,60 @@ export const DIAGNOSIS_TOOLS: Record<string, { desc: string; build: ToolBuild }>
     },
   },
 
+  webshell_scan: {
+    desc: "网站代码后门/WebShell 扫描（只读，不执行代码）：扫描指定网站目录或单个文件，识别 PHP 一句话/大马、编码混淆执行、JSP/ASPX 木马特征与恶意 .htaccess/.user.ini。args: {path: 目标目录或文件绝对路径(必填)}",
+    build: (a) => {
+      const path = safePath(a.path);
+      if (!path) return null;
+      const filesExpr = [
+        "find \"$T\" -type f \\(",
+        "-iname '*.php' -o -iname '*.php3' -o -iname '*.php4' -o -iname '*.php5' -o -iname '*.php7' -o -iname '*.phtml' -o -iname '*.pht' -o -iname '*.phps'",
+        "-o -iname '*.jsp' -o -iname '*.jspx' -o -iname '*.asp' -o -iname '*.aspx' -o -iname '*.ashx' -o -iname '*.asa' -o -iname '*.asmx'",
+        "-o -iname '*.cgi' -o -iname '*.pl' -o -iname '*.py'",
+        "-o -name '.htaccess' -o -name '.user.ini'",
+        "\\) -not -path '*/.git/*' -not -path '*/node_modules/*' -not -path '*/.svn/*' -not -path '*/vendor/*' -not -path '*/runtime/*' -not -path '*/cache/*' -not -path '*/tmp/*' 2>/dev/null | head -3000",
+      ].join(" ");
+      return [
+        "echo '========== WebShell / 后门检测（只读）=========='",
+        `T=${path}`,
+        "if [ ! -e \"$T\" ]; then echo '错误: 目标不存在或不可访问'; exit 0; fi",
+        "if [ -d \"$T\" ]; then",
+        "  FILES=$(" + filesExpr + ")",
+        "  echo '扫描类型: 目录递归'",
+        "else",
+        "  FILES=\"$T\"",
+        "  echo '扫描类型: 单文件'",
+        "fi",
+        "[ -z \"$FILES\" ] && { echo '未发现可扫描的脚本文件'; exit 0; }",
+        "SCANNED=$(echo \"$FILES\" | wc -l)",
+        "echo \"目标: $T\"",
+        "echo \"待扫描文件数: $SCANNED\"",
+        "",
+        "echo '---------- [高危] 动态执行后门 (eval/assert/system/exec 等接收入参) ----------'",
+        "grep -nHE --color=never -e '(eval|assert|system|exec|shell_exec|passthru|popen|proc_open)\\s*\\(\\s*\\$_(GET|POST|REQUEST|COOKIE|SERVER)' -e '(eval|assert|system|shell_exec|passthru)\\s*\\(\\s*\\$' $FILES 2>/dev/null | head -60 | cut -c1-240 || true",
+        "",
+        "echo '---------- [高危] 已知工具/一句话特征 (c99/r57/b374k/wso 等, 大小写不敏感) ----------'",
+        "grep -inHF --color=never -e 'c99sh' -e 'r57shell' -e 'b374k' -e 'filespy' -e 'phpspy' -e 'marijuana' -e 'china chopper' -e '$GLOBALS[' $FILES 2>/dev/null | head -60 | cut -c1-240 || true",
+        "",
+        "echo '---------- [高危] JSP/ASPX/动态脚本执行特征 ----------'",
+        "grep -nHE --color=never -e 'Runtime\\s*\\.\\s*getRuntime\\s*\\(\\s*\\)\\s*\\.\\s*exec' -e 'ProcessBuilder' -e 'javax\\s*\\.\\s*script' -e 'System\\s*\\.\\s*Diagnostics\\s*\\.\\s*Process' -e 'Process\\s*\\.\\s*Start\\s*\\(' $FILES 2>/dev/null | head -60 | cut -c1-240 || true",
+        "",
+        "echo '---------- [可疑] 编码/压缩载荷 (base64_decode/gzinflate/str_rot13, 建议人工复核) ----------'",
+        "grep -nHE --color=never -e '(base64_decode|gzinflate|gzuncompress|str_rot13)\\s*\\(' -e '(base64_decode|gzinflate)\\s*\\(\\s*[A-Za-z0-9+/=]{200,}' $FILES 2>/dev/null | head -80 | cut -c1-240 || true",
+        "",
+        "echo '---------- [可疑] 动态函数/正则执行 (create_function/preg_replace 带 e/array_map assert) ----------'",
+        "grep -nHE --color=never -e 'create_function\\s*\\(' -e 'preg_replace\\s*\\(\\s*[\"][^\"].*[/][a-z]*e[a-z]*[\"]' -e 'array_map\\s*\\(\\s*[\"]assert[\"]' $FILES 2>/dev/null | head -60 | cut -c1-240 || true",
+        "",
+        "echo '---------- [可疑] .htaccess/.user.ini 恶意配置 (auto_prepend/AddType/php_value) ----------'",
+        "grep -nHE --color=never -e 'auto_prepend_file' -e 'auto_append_file' -e 'AddType\\s+.*php' -e 'SetHandler.*php' $FILES 2>/dev/null | head -40 | cut -c1-240 || true",
+        "",
+        "echo '---------- 汇总 ----------'",
+        "echo \"已扫描文件数: $SCANNED（超过 3000 个将截断）\"",
+        "echo '提示: 命中行不等于后门，请人工复核文件内容后再处置；未命中也不代表绝对安全。'",
+      ].join("\n");
+    },
+  },
+
 };
 
 const TOOL_DESCS = Object.entries(DIAGNOSIS_TOOLS)
@@ -388,6 +442,9 @@ const SYSTEM_PROMPT_CORE = `你是一名资深 Linux 运维排障专家，运行
 4. 证据充分、根因明确时用 decision=conclude，并给出 conclusion。
 5. 工具执行失败或被拒绝时，换一个角度继续排查；不要反复执行相同命令。
 6. stop 仅用于确认问题无法定位或无需继续。
+7. 自动取证优先：只要问题涉及服务器/网站/服务/资源/数据的实际状态，就必须先自动调用白名单工具取证，禁止不执行任何工具就凭经验或模型知识直接下结论。
+8. 参数不全时不要反问用户：先用发现类工具（web_stack/files/network/services/processes/mysql/dns_check 等）自动定位候选域名/目录/服务/库，再继续取证；只有所有自动发现手段都用尽时才可 stop。
+9. 提供多轮上下文时延续上一轮结论继续验证或收尾，不要重复已确认内容；reason 需写明依据的证据或待验证点。
 
 可用工具：
 ${TOOL_DESCS}

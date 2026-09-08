@@ -25,7 +25,7 @@ import {
   Mic, Volume2, VolumeX, History, Plus, Play, Pencil, Trash2, X,
   Workflow as WorkflowIcon, Server, Sparkles, ArrowRight, BarChart3, Stethoscope,
   Terminal as TerminalIcon, RefreshCw, Globe, Database, Activity, ShieldAlert,
-  CalendarClock, FolderSearch, UploadCloud, ScrollText, Network, Gauge,
+  CalendarClock, FolderSearch, FileSearch, UploadCloud, ScrollText, Network, Gauge,
 } from "lucide-react";
 
 type AgentId =
@@ -39,6 +39,7 @@ type AgentId =
   | "mysql-diag"
   | "traffic-diag"
   | "security-diag"
+  | "webshell-diag"
   | "server-diag"
   | "cron-diag"
   | "file-diag"
@@ -97,6 +98,7 @@ const AGENT_META: Record<AgentId, { name: string; cls: string }> = {
   "mysql-diag": { name: "数据库诊断助手", cls: "text-cyan-400 border-cyan-500/30 bg-cyan-500/10" },
   "traffic-diag": { name: "网站流量分析助手", cls: "text-teal-400 border-teal-500/30 bg-teal-500/10" },
   "security-diag": { name: "安全诊断助手", cls: "text-red-400 border-red-500/30 bg-red-500/10" },
+  "webshell-diag": { name: "网站后门扫描助手", cls: "text-rose-400 border-rose-500/30 bg-rose-500/10" },
   "server-diag": { name: "服务器分析助手", cls: "text-violet-400 border-violet-500/30 bg-violet-500/10" },
   "cron-diag": { name: "计划任务诊断助手", cls: "text-amber-400 border-amber-500/30 bg-amber-500/10" },
   "file-diag": { name: "文件分析助手", cls: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10" },
@@ -177,7 +179,7 @@ const CAP_CARDS: {
   },
 ];
 
-// 12 个专项诊断助手（点选直达；对话也会按意图自动路由）
+// 13 个专项诊断助手（点选指定；对话也会按意图自动路由）
 const EXPERT_CARDS: {
   agent: AgentId;
   name: string;
@@ -206,6 +208,11 @@ const EXPERT_CARDS: {
     agent: "security-diag", name: "安全诊断助手", desc: "入侵迹象 / 异常进程 / 登录审计",
     prompt: "帮我做一次服务器安全风险检查",
     icon: ShieldAlert, hover: "hover:border-red-500/40", iconBox: "bg-red-500/15 text-red-400 border-red-500/30",
+  },
+  {
+    agent: "webshell-diag", name: "网站后门扫描助手", desc: "WebShell / 一句话木马 / 编码混淆特征",
+    prompt: "帮我扫描指定网站目录或单个文件有没有后门",
+    icon: FileSearch, hover: "hover:border-rose-500/40", iconBox: "bg-rose-500/15 text-rose-400 border-rose-500/30",
   },
   {
     agent: "server-diag", name: "服务器分析助手", desc: "资源占用 / 健康状态 / 隐患分析",
@@ -533,6 +540,7 @@ export default function AgentPage() {
   const [serverId, setServerId] = useState("");
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
+  const [activeAgent, setActiveAgent] = useState<AgentId | null>(null);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -639,10 +647,18 @@ export default function AgentPage() {
     };
   }, []);
 
-  async function send(text?: string, agent?: AgentId) {
+  // 点选助手卡片只“选中”智能体，不再直接发送示例 prompt，由用户输入问题后回车/发送
+  function pickAgent(agent: AgentId) {
+    setActiveAgent((prev) => (prev === agent ? null : agent));
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  async function send(text?: string, agent?: AgentId | null, opts?: { ignoreSelection?: boolean }) {
     const content = (text ?? input).trim();
     if (!content || !wid || !serverId || loading) return;
+    const target = opts?.ignoreSelection ? (agent ?? undefined) : (agent ?? activeAgent ?? undefined);
     setInput("");
+    setActiveAgent(null);
     setLoading(true);
     inputRef.current?.focus();
 
@@ -654,7 +670,7 @@ export default function AgentPage() {
     try {
       const res = await api.post<{ taskId: string }>(
         `/workspaces/${wid}/servers/${serverId}/agents/chat`,
-        agent ? { message: content, agent, history } : { message: content, history }
+        target ? { message: content, agent: target, history } : { message: content, history }
       );
       const taskId = res.taskId;
       const poll = setInterval(async () => {
@@ -782,6 +798,14 @@ export default function AgentPage() {
   }
 
   const selServer = onlineServers.find((s) => s.id === serverId);
+  const activeMeta = activeAgent ? AGENT_META[activeAgent] : null;
+  const inputPlaceholder = !serverId
+    ? "请先在左侧选择一台在线服务器"
+    : listening
+      ? "正在聆听，请说话…"
+      : activeMeta
+        ? `已选「${activeMeta.name}」，请输入你的具体问题后发送（可点 × 取消指定）`
+        : "描述意图，如：检查服务器健康 / 网站504排查 / 生成本周周报…";
   const inputCls = "w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
   return (
@@ -807,7 +831,7 @@ export default function AgentPage() {
             {QUICK_ACTIONS.map((q) => (
               <button
                 key={q.label}
-                onClick={() => send(q.prompt)}
+                onClick={() => send(q.prompt, null, { ignoreSelection: true })}
                 disabled={!serverId || loading}
                 className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-2 text-left text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors disabled:opacity-50"
               >
@@ -871,7 +895,7 @@ export default function AgentPage() {
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-sm">运维智能体</p>
-            <p className="text-xs text-muted-foreground truncate">一句话描述意图 · 自动路由 12 个专项助手 / 巡检 / 排查 / 终端 / 周报 / 自定义工作流</p>
+            <p className="text-xs text-muted-foreground truncate">一句话描述意图 · 自动路由 13 个专项助手 / 巡检 / 排查 / 终端 / 周报 / 自定义工作流</p>
           </div>
           <div className="ml-auto flex items-center gap-2 shrink-0">
             {selServer && (
@@ -909,7 +933,7 @@ export default function AgentPage() {
                     <Bot className="h-6 w-6" />
                   </div>
                   <h2 className="text-xl font-bold">运维智能体</h2>
-                  <p className="text-sm text-muted-foreground">一句话描述意图，或点选下方能力 · 自动路由 12 个专项诊断助手与巡检 / 排查 / 终端 / 周报</p>
+                  <p className="text-sm text-muted-foreground">一句话描述意图，或点选下方能力 · 自动路由 13 个专项诊断助手与巡检 / 排查 / 终端 / 周报</p>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2 items-start">
@@ -918,16 +942,17 @@ export default function AgentPage() {
                       <p className="text-sm font-semibold flex items-center gap-1.5">
                         <Sparkles className="h-4 w-4 text-primary" />快捷能力
                       </p>
-                      <span className="text-[11px] text-muted-foreground">点按直达子智能体</span>
+                      <span className="text-[11px] text-muted-foreground">点按选择，输入问题后发送</span>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {CAP_CARDS.map((c) => (
                         <button
                           key={c.agent}
                           disabled={!serverId || loading}
-                          onClick={() => send(c.prompt, c.agent)}
+                          onClick={() => pickAgent(c.agent)}
                           className={cn(
                             "group flex flex-col gap-2 rounded-lg border border-border bg-background/50 p-3 text-left transition-colors hover:shadow-sm disabled:opacity-50",
+                            activeAgent === c.agent ? "border-primary/70 ring-2 ring-primary/20 bg-primary/5" : "",
                             c.hover
                           )}
                         >
@@ -936,7 +961,11 @@ export default function AgentPage() {
                               <c.icon className="h-4 w-4" />
                             </span>
                             <span className="text-sm font-semibold">{c.name}</span>
-                            <ArrowRight className="h-3.5 w-3.5 ml-auto text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+                            {activeAgent === c.agent ? (
+                              <CheckCircle2 className="h-3.5 w-3.5 ml-auto text-primary" />
+                            ) : (
+                              <ArrowRight className="h-3.5 w-3.5 ml-auto text-muted-foreground/50 transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+                            )}
                           </div>
                           <p className="text-xs text-muted-foreground leading-relaxed">{c.desc}</p>
                         </button>
@@ -1035,16 +1064,17 @@ export default function AgentPage() {
                   <div className="flex items-center gap-2">
                     <Sparkles className="h-4 w-4 text-primary" />
                     <p className="text-sm font-semibold">专项诊断助手</p>
-                    <span className="text-[11px] text-muted-foreground">对话会自动匹配，也可点选直达（共 12 个）</span>
+                    <span className="text-[11px] text-muted-foreground">对话会自动匹配，也可点选指定（共 13 个），输入问题后发送</span>
                   </div>
                   <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
                     {EXPERT_CARDS.map((c) => (
                       <button
                         key={c.agent}
                         disabled={!serverId || loading}
-                        onClick={() => send(c.prompt, c.agent)}
+                        onClick={() => pickAgent(c.agent)}
                         className={cn(
                           "group flex items-start gap-2.5 rounded-lg border border-border bg-background/50 p-2.5 text-left transition-colors hover:shadow-sm disabled:opacity-50",
+                          activeAgent === c.agent ? "border-primary/70 ring-2 ring-primary/20 bg-primary/5" : "",
                           c.hover
                         )}
                       >
@@ -1064,8 +1094,8 @@ export default function AgentPage() {
                   {SUGGESTIONS.map((s) => (
                     <button
                       key={s}
-                      onClick={() => send(s)}
-                      disabled={!serverId || loading}
+                      onClick={() => { setInput(s); inputRef.current?.focus(); }}
+                      disabled={!serverId}
                       className="text-xs px-3 py-1.5 rounded-full border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors disabled:opacity-50"
                     >
                       {s}
@@ -1104,14 +1134,16 @@ export default function AgentPage() {
           {messages.length > 0 && (
             <>
               <div className="flex items-center gap-1.5 flex-wrap mb-2">
-                <span className="text-[11px] text-muted-foreground/70 mr-0.5">快捷切换：</span>
+                <span className="text-[11px] text-muted-foreground/70 mr-0.5">快捷能力：</span>
                 {CAP_CARDS.map((c) => (
                   <button
                     key={c.agent}
-                    onClick={() => send(c.prompt, c.agent)}
+                    onClick={() => pickAgent(c.agent)}
                     disabled={!serverId || loading}
                     title={c.desc}
-                    className={cn("inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 pl-1 pr-2.5 h-7 text-[11px] text-foreground transition-colors disabled:opacity-50", c.hover)}
+                    className={cn("inline-flex items-center gap-1.5 rounded-full border border-border bg-background/60 pl-1 pr-2.5 h-7 text-[11px] text-foreground transition-colors disabled:opacity-50",
+                      activeAgent === c.agent ? "border-primary/70 bg-primary/10 text-primary" : "",
+                      c.hover)}
                   >
                     <span className={cn("flex h-5 w-5 items-center justify-center rounded-full border", c.iconBox)}>
                       <c.icon className="h-3 w-3" />
@@ -1125,16 +1157,19 @@ export default function AgentPage() {
                 {EXPERT_CARDS.map((c) => (
                   <button
                     key={c.agent}
-                    onClick={() => send(c.prompt, c.agent)}
+                    onClick={() => pickAgent(c.agent)}
                     disabled={!serverId || loading}
                     title={c.desc}
-                    className={cn("inline-flex items-center gap-1 rounded-full border border-border bg-background/60 pl-1.5 pr-2 h-6 text-[10px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50", c.hover)}
+                    className={cn("inline-flex items-center gap-1 rounded-full border border-border bg-background/60 pl-1.5 pr-2 h-6 text-[10px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50",
+                      activeAgent === c.agent ? "border-primary/70 bg-primary/10 text-primary" : "",
+                      c.hover)}
                   >
                     <c.icon className="h-3 w-3 shrink-0" />
                     {c.name}
                   </button>
                 ))}
               </div>
+              <p className="text-[11px] text-muted-foreground/60 mt-0 mb-2">点选助手只切换目标、不会立即发送，在输入框描述你的问题后回车或点发送。</p>
             </>
           )}
           <div className={cn(
@@ -1142,6 +1177,19 @@ export default function AgentPage() {
             "focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10"
           )}>
             <Bot className="h-4 w-4 text-muted-foreground shrink-0" />
+            {activeAgent && activeMeta && (
+              <span className={cn("inline-flex max-w-52 items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium shrink-0", activeMeta.cls)}>
+                <Sparkles className="h-3 w-3 shrink-0" />
+                <span className="truncate">{activeMeta.name}</span>
+                <button
+                  onClick={() => setActiveAgent(null)}
+                  title="取消指定，恢复自动路由"
+                  className="ml-0.5 rounded-full p-0.5 hover:bg-background/60 transition-colors shrink-0"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
             <input
               ref={inputRef}
               value={input}
@@ -1152,7 +1200,7 @@ export default function AgentPage() {
                 if (loading) { toast("上一任务仍在执行，可先输入，完成后点击发送"); return; }
                 send();
               }}
-              placeholder={!serverId ? "请先在左侧选择一台在线服务器" : listening ? "正在聆听，请说话…" : "描述意图，如：检查服务器健康 / 网站504排查 / 生成本周周报…"}
+              placeholder={inputPlaceholder}
               disabled={!serverId}
               className="flex-1 bg-transparent outline-none text-sm px-1 py-2 placeholder:text-muted-foreground/60"
             />
@@ -1184,7 +1232,7 @@ export default function AgentPage() {
           </div>
           <p className="text-[11px] text-muted-foreground/70 mt-2 flex items-center gap-1.5">
             <ShieldCheck className="h-3 w-3 text-emerald-500" />
-            已自动调用：AI 巡检 / 自主排查 / 12 个专项助手 / 周报 / 命令 / 工作流，安全模式下仅执行只读操作
+            已自动调用：AI 巡检 / 自主排查 / 13 个专项助手 / 周报 / 命令 / 工作流，安全模式下仅执行只读操作
           </p>
         </div>
       </main>

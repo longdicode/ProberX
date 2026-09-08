@@ -1,4 +1,4 @@
-// 12 个「专项诊断助手」：复用自主排查引擎（白名单只读工具 + LLM 规划），
+// 13 个「专项诊断助手」（含网站后门扫描）：复用自主排查引擎（白名单只读工具 + LLM 规划），
 // 通过不同的专项提示词与工具子集实现聚焦诊断；同时支持点选入口与对话自动路由。
 export interface ExpertAgentDef {
   id: ExpertAgentId;
@@ -18,6 +18,7 @@ export const EXPERT_AGENT_IDS = [
   "mysql-diag",
   "traffic-diag",
   "security-diag",
+  "webshell-diag",
   "server-diag",
   "cron-diag",
   "file-diag",
@@ -106,7 +107,7 @@ export const EXPERT_AGENTS: ExpertAgentDef[] = [
     color: "#ef4444",
     sample: "帮我做一次服务器安全风险检查",
     focus: "专项安全审计：登录记录与暴力破解迹象、fail2ban、异常进程/连接、可疑定时任务与后门风险。",
-    tools: ["network", "auth_audit", "crontab", "processes", "services", "docker", "logs", "error_logs", "cat_file", "files", "os_info", "disk_usage"],
+    tools: ["network", "auth_audit", "crontab", "processes", "services", "docker", "logs", "error_logs", "webshell_scan", "cat_file", "files", "os_info", "disk_usage"],
     routes: [
       "(安全|入侵|被黑|webshell|木马|后门|爆破|暴力破解|异常登录|可疑进程|风险扫描|安全检测|安全体检|fail2ban|端口扫描)",
       "(排查|检查|检测|扫描|分析).{0,10}(入侵|病毒|木马|后门|webshell|安全)",
@@ -117,6 +118,28 @@ export const EXPERT_AGENTS: ExpertAgentDef[] = [
       "2. lastb 或 btmp 无记录不代表绝对安全，只能说“未发现该日志源的失败登录记录”；结论要区分已确认与证据不足。",
       "3. 发现可疑进程/脚本/定时任务时先取证（完整命令行、启动时间、父进程、文件路径与修改时间），再给人工处置建议，不自动删除。",
       "4. 对外监听的非常规端口要结合运行进程判断用途，不要一看到监听就判定为风险。",
+    ],
+  },
+  {
+    id: "webshell-diag",
+    name: "网站后门扫描助手",
+    desc: "扫描指定网站目录或单个文件中的 WebShell/后门特征（只读，仅报告不处置）",
+    icon: "FileSearch",
+    color: "#f43f5e",
+    sample: "帮我扫描 /www/wwwroot 下某个网站目录有没有后门",
+    focus: "专项检测网站目录或单个文件中的 WebShell/后门：PHP 一句话/大马、编码混淆动态执行、JSP/ASPX 木马与恶意 .htaccess/.user.ini；只读扫描并输出命中清单，不做删除/隔离。",
+    tools: ["webshell_scan", "files", "cat_file", "web_stack", "network", "processes", "services", "logs", "os_info"],
+    routes: [
+      "(后门|木马|webshell|一句话|大马|马文件|被挂马|挂马|恶意代码|代码后门).{0,20}(扫描|检测|检查|查|排查|分析|清理|清除|有没有|是不是|是否)",
+      "(扫描|检测|检查|排查|审计|查).{0,30}(后门|木马|webshell|一句话|马文件|被挂马|挂马|恶意代码|网站代码)",
+      "(网站|站点|目录|文件|代码).{0,12}(后门|木马|webshell|被挂马|挂马|恶意代码)",
+    ],
+    domainRules: [
+      "1. webshell_scan 必须提供 path（网站目录或单个文件的绝对路径）：用户给了明确目录/文件就直接扫描；未给路径时先 files /www/wwwroot 或 web_stack 定位站点根目录（如 /www/wwwroot/<站点>），确认存在后再扫描，不要在路径不确定时反复猜测。",
+      "2. 目录扫描会自动排除 .git/node_modules/vendor/runtime/cache/tmp，脚本文件超过 3000 个会截断，报告需说明覆盖范围与截断情况。",
+      "3. 命中行只是“特征可疑”，不等于后门：报告按[高危]/[可疑]分组列出 文件:行号:片段，并提示人工复核文件内容、上下文与修改时间后再处置；本工具只读，禁止任何删除/重命名/隔离操作。",
+      "4. 结果无命中也要说明已扫描文件数与覆盖的脚本类型；不要把“无命中”说成“绝对安全”。",
+      "5. 与安全诊断助手分工：涉及登录爆破/入侵迹象/异常进程/挖矿时不属于本助手范围，应提示用户改用安全诊断助手。",
     ],
   },
   {
@@ -303,13 +326,14 @@ export function expertDef(id: string | undefined | null): ExpertAgentDef | null 
   return EXPERT_BY_ID[id];
 }
 
-// 自动路由优先级：越具体越靠前（dns/ssl/ftp/mysql/cron/security/traffic/website/log/file/perf/server）
+// 自动路由优先级：越具体越靠前（dns/ssl/ftp/mysql/cron/webshell/security/traffic/website/log/file/perf/server）
 export const EXPERT_ROUTE_PRIORITY: ExpertAgentId[] = [
   "dns-diag",
   "ssl-diag",
   "ftp-diag",
   "mysql-diag",
   "cron-diag",
+  "webshell-diag",
   "security-diag",
   "traffic-diag",
   "website-diag",
@@ -324,15 +348,98 @@ const EXPERT_ROUTERS = EXPERT_ROUTE_PRIORITY.map((id) => ({
   re: new RegExp(EXPERT_BY_ID[id].routes.join("|"), "i"),
 }));
 
-/** 对话自动路由：命中任一专项关键词即返回对应专家助手 id */
+/** 专项助手“点名直呼”别名表：用户可直接说“用XX助手/切换到XX/帮我叫XX” */
+const EXPERT_NAME_ALIASES: Record<ExpertAgentId, string[]> = {
+  "website-diag": ["网站诊断助手", "网站诊断", "站点诊断", "网站助手", "域名助手"],
+  "mysql-diag": ["数据库诊断助手", "数据库诊断", "数据库助手", "mysql助手", "mariadb助手"],
+  "traffic-diag": ["流量分析助手", "流量助手", "访问分析助手", "带宽助手", "网站流量助手"],
+  "security-diag": ["安全诊断助手", "安全助手", "安全体检助手"],
+  "webshell-diag": ["后门扫描助手", "后门助手", "网站后门助手", "webshell助手"],
+  "server-diag": ["服务器分析助手", "服务器助手", "资源分析助手", "资源助手"],
+  "cron-diag": ["计划任务诊断助手", "计划任务助手", "定时任务助手", "cron助手"],
+  "file-diag": ["文件分析助手", "文件助手", "大文件助手", "目录分析助手"],
+  "ftp-diag": ["FTP诊断助手", "FTP助手", "ftp诊断助手", "ftp助手"],
+  "ssl-diag": ["SSL诊断助手", "SSL助手", "ssl诊断助手", "ssl助手", "证书诊断助手", "证书助手"],
+  "log-diag": ["日志分析助手", "日志助手"],
+  "dns-diag": ["DNS诊断助手", "DNS助手", "dns助手", "域名解析助手", "解析助手"],
+  "perf-diag": ["性能分析助手", "性能助手", "瓶颈助手", "卡顿助手"],
+};
+
+/** 显式点名匹配：返回被点名的专项助手 */
+export function matchExpertByName(message: string): ExpertAgentId | null {
+  const raw = (message ?? "").trim();
+  if (!raw) return null;
+  const m = raw.toLowerCase();
+  for (const e of EXPERT_AGENTS) {
+    const candidates = [e.name.toLowerCase(), ...(EXPERT_NAME_ALIASES[e.id] ?? []).map((a) => a.toLowerCase())];
+    for (const alias of candidates) {
+      if (!alias) continue;
+      const idx = m.indexOf(alias);
+      if (idx < 0) continue;
+      const before = raw.slice(Math.max(0, idx - 8), idx);
+      const after = raw.slice(idx + alias.length, idx + alias.length + 10);
+      // 动词前缀 / 命令后缀 / 整句点名都算显式调用，避免把“XX助手”当普通名词误伤
+      if (
+        raw.length <= alias.length + 2 ||
+        /(用|让|叫|请|帮我|切换到|切换|调用|打开|找|选择|点|使用|调起|启用|启动)/.test(before) ||
+        /(助手|帮我|一下|检查|查看|看看|诊断|分析|扫描|排查|处理|查查|操作|执行)/.test(after)
+      ) {
+        return e.id;
+      }
+    }
+  }
+  return null;
+}
+
+/** 对象词兜底：正则未命中但对象词极明确时，按优先级自动调用对应助手 */
+const EXPERT_KEYWORD_FALLBACK: { re: RegExp; agent: ExpertAgentId; exclude?: RegExp }[] = [
+  { re: /(dns|解析记录|域名解析|A记录|cname|mx记录|ns记录|resolv|hosts)/i, agent: "dns-diag" },
+  { re: /(ssl证书|https证书|证书|tls|有效期|证书过期|证书配置|证书错误)/i, agent: "ssl-diag" },
+  { re: /(ftp|21端口|vsftpd|pure-ftpd|被动模式)/i, agent: "ftp-diag" },
+  { re: /(mysql|mariadb|数据库|慢查询|库表|数据表|连接数|innodb|sql)/i, agent: "mysql-diag", exclude: /(日志|文件|数据文件|备份文件)/i },
+  { re: /(定时任务|计划任务|crontab|cron|crond|开机自启|自启动)/i, agent: "cron-diag" },
+  { re: /(后门|木马|webshell|一句话|大马|被挂马|挂马|恶意代码)/i, agent: "webshell-diag" },
+  { re: /(入侵|被黑|爆破|暴力破解|异常登录|fail2ban|挖矿|可疑进程|端口扫描|安全审计)/i, agent: "security-diag" },
+  { re: /(访问量|访问统计|独立访客|uv|pv|带宽|访问来源|流量|请求数|并发数)/i, agent: "traffic-diag" },
+  { re: /(网站|站点|域名|网址|虚拟主机|首页|页面|反代|代理|nginx|apache|caddy)/i, agent: "website-diag", exclude: /(解析|证书|ssl|流量|后门|木马|挂马|webshell|数据库|mysql|巡检|体检|健康检查|健康状况|健康度|健康吗)/i },
+  { re: /(错误日志|error\s*log|日志|log)/i, agent: "log-diag", exclude: /(访问|access|mysql|nginx|php|网站|站点|流量)/i },
+  { re: /(大文件|文件占用|目录占用|文件权限|目录结构|空间不足|空间不够|没空间|磁盘占用|清理|释放空间)/i, agent: "file-diag", exclude: /(网站|站点|数据库|mysql)/i },
+  { re: /(性能|瓶颈|cpu\s*100|cpu\s*满载|内存占满|io\s*等待|卡顿|高负载|满载)/i, agent: "perf-diag", exclude: /(网站|站点|页面|访问|巡检|体检|健康检查|健康状况|健康度|健康吗)/i },
+  { re: /(服务器|主机|机器|资源|负载|内存|磁盘)/i, agent: "server-diag", exclude: /(网站|站点|域名|数据库|mysql|流量|证书|巡检|体检|健康检查|健康评分|健康报告|健康状态|健康状况|健康度|健康吗|周报)/i },
+];
+
+/** 对话自动路由：先点名直呼 → 高优先级正则 → 强对象词兜底 */
 export function routeExpert(message: string): ExpertAgentId | null {
   const m = (message ?? "").trim();
   if (!m) return null;
+  // 纯知识/教程问句（不带故障意图）不自动路由到诊断助手，交给通用助手解答
+  const knowledgeAsk =
+    /^(什么是|啥是|是什么|解释一下|介绍一下|说明一下|怎么理解|教程|推荐|哪个好|怎么选|如何|介绍下)/.test(m) ||
+    /(有什么区别|区别是|是什么意思|是什么|啥意思|怎么选|工作原理|原理是|什么原理|是什么东西|怎么做教程)/.test(m);
+  if (knowledgeAsk) {
+    const statusOrFault =
+      /(是什么(情况|状态|问题)|什么情况|怎么样了|出什么|为什么|原因|故障|排查|报错|异常|502|503|504|500|超时|打不开|访问不了|连不上|挂了|很慢|很卡|卡顿|磁盘满|内存不足|过期|到期|失效|被黑|入侵|木马|后门|我的|我们|本机|这台|当前)/.test(m);
+    // 纯“错误码是什么意思”等名词解释交给通用助手；一旦涉及原因/处置/我的服务器则继续路由
+    const codeMeaningOnly =
+      /(502|503|504|500|404|错误码|报错码)/.test(m) &&
+      !/(为什么|原因|怎么解决|怎么处理|怎么办|排查|我的|我们|本机|这台|服务器|网站|域名)/.test(m);
+    if (!statusOrFault || codeMeaningOnly) return null;
+  }
+  const named = matchExpertByName(m);
+  if (named) return named;
+  const healthAsk = /巡检|体检|健康检查|健康评分|健康报告|健康状态|健康状况|健康度|健康吗|服务器健康/.test(m);
   for (const r of EXPERT_ROUTERS) {
     if (!r.re.test(m)) continue;
     // 排除会与「AI 巡检」等既有能力冲突的健康体检类语义（如"检查服务器健康状况"仍走 AI 巡检）
-    if ((r.id === "server-diag" || r.id === "perf-diag") && /巡检|体检|健康检查|健康评分|健康报告|健康状态/.test(m)) continue;
+    if ((r.id === "server-diag" || r.id === "perf-diag") && healthAsk) continue;
     return r.id;
+  }
+  if (!healthAsk) {
+    for (const fb of EXPERT_KEYWORD_FALLBACK) {
+      if (!fb.re.test(m)) continue;
+      if (fb.exclude && fb.exclude.test(m)) continue;
+      return fb.agent;
+    }
   }
   return null;
 }

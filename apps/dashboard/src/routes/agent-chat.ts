@@ -21,7 +21,7 @@ export const agentChatRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(task);
   });
 
-  // Agent catalog（通用能力 + 12 个专项诊断助手；全局目录，无需 workspace 守卫）
+  // Agent catalog（通用能力 + 13 个专项诊断助手；全局目录，无需 workspace 守卫）
   app.get("/agents", { preHandler: [app.authenticate] }, async (_req, reply) => {
     return reply.send([
       { id: "assistant", name: "通用助手", desc: "日常问答与运维知识", icon: "Sparkles", color: "#6366f1", kind: "chat" },

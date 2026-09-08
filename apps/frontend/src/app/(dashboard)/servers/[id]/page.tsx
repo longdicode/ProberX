@@ -183,14 +183,14 @@ export default function ServerDetailPage() {
       </Card>
 
       {/* Tabs */}
-      <Tabs defaultValue="metrics">
+      <Tabs defaultValue="resources">
         <TabsList>
+          <TabsTrigger value="resources">{t("servers.resources")}</TabsTrigger>
           <TabsTrigger value="metrics">{t("servers.metrics")}</TabsTrigger>
           <TabsTrigger value="processes">{t("servers.processes")}</TabsTrigger>
           <TabsTrigger value="terminal">{t("servers.terminal")}</TabsTrigger>
           <TabsTrigger value="files">{t("servers.files")}</TabsTrigger>
           <TabsTrigger value="containers">{t("servers.containers")}</TabsTrigger>
-          <TabsTrigger value="resources">{t("servers.resources")}</TabsTrigger>
         </TabsList>
         <TabsContent value="metrics" className="space-y-4 mt-4">
           <Card className="border-border/50">
