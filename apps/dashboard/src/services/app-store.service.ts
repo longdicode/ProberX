@@ -552,7 +552,7 @@ const seedData: SeedEntry[] = [
     restart: unless-stopped`,
   },
 
-  // AI/IoT (1)
+  // AI/IoT (2)
   {
     name: "Home Assistant",
     description: "Open-source home automation platform. Control lights, climate, media, and more.",
@@ -573,6 +573,30 @@ const seedData: SeedEntry[] = [
     volumes:
       - ./config:/config
       - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped`,
+  },
+
+  {
+    name: "DeepSeek Harness",
+    description: "DeepSeek's open-source agent harness: everything is a plugin. Web UI for building and orchestrating AI agents, plugins and tools.",
+    category: "AI",
+    icon: "bot",
+    version: "latest",
+    author: "DeepSeek AI",
+    homepage: "https://github.com/deepseek-ai/deepseek-harness",
+    memoryLimit: "1g",
+    cpuLimit: "1.0",
+    defaultEnv: { PORT: "3080", DEEPSEEK_API_KEY: "" },
+    composeYaml: `services:
+  app:
+    image: ghcr.io/huoxue1/deepseek-harness:latest
+    container_name: "\${APP_NAME}"
+    ports:
+      - "\${PORT}:3080"
+    environment:
+      DEEPSEEK_API_KEY: "\${DEEPSEEK_API_KEY}"
+    volumes:
+      - ./data:/root/.dsh
     restart: unless-stopped`,
   },
 
@@ -601,14 +625,18 @@ const seedData: SeedEntry[] = [
 ];
 
 export async function seed(workspaceId: string, db: DbClient) {
-  const existing = await db.select({ id: appStoreEntries.id })
+  const existing = await db.select({ name: appStoreEntries.name })
     .from(appStoreEntries)
-    .where(eq(appStoreEntries.workspaceId, workspaceId))
-    .limit(1);
-  if (existing.length > 0) return { seeded: false, message: "App store already has entries" };
+    .where(eq(appStoreEntries.workspaceId, workspaceId));
+  const existingNames = new Set(existing.map((entry) => entry.name));
 
-  let count = 0;
+  let inserted = 0;
+  let skipped = 0;
   for (const entry of seedData) {
+    if (existingNames.has(entry.name)) {
+      skipped++;
+      continue;
+    }
     try {
       await db.insert(appStoreEntries).values({
         workspaceId,
@@ -625,10 +653,10 @@ export async function seed(workspaceId: string, db: DbClient) {
         homepage: entry.homepage,
         isEnabled: true,
       } as any);
-      count++;
+      inserted++;
     } catch (err: any) {
       throw new Error(`Seed failed on "${entry.name}": ${err.message}`);
     }
   }
-  return { seeded: true, count };
+  return { seeded: inserted > 0, inserted, skipped };
 }

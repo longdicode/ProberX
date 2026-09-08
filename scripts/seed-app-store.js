@@ -1,4 +1,4 @@
-// Seed the app store with 18 applications
+// Seed the app store with built-in applications (only inserts missing entries)
 const { Pool } = require('pg');
 
 async function main() {
@@ -6,10 +6,6 @@ async function main() {
     connectionString: process.env.DATABASE_URL || 'postgresql://proberx:proberx@localhost:5432/proberx',
   });
   const WID = process.env.WID || '8219661e-92d1-47c5-9fd7-9c3579f9123e';
-
-  // Clear existing
-  await pool.query('DELETE FROM app_store_entries WHERE workspace_id = $1', [WID]);
-  console.log('Cleared existing entries');
 
   const apps = [
     // DevOps
@@ -72,18 +68,28 @@ async function main() {
     { name: 'Changedetection', desc: 'Monitor web pages for changes. Get notified when content updates.', cat: 'Monitoring', icon: 'refresh-cw', mem: '256m', cpu: '0.3', ver: 'latest', author: 'Changedetection', hp: 'https://changedetection.io',
       yaml: 'services:\n  app:\n    image: ghcr.io/dgtlmoon/changedetection.io:latest\n    container_name: "${APP_NAME}"\n    ports:\n      - "${PORT}:5000"\n    volumes:\n      - ./data:/datastore\n    restart: unless-stopped',
       env: { PORT: '5000' } },
+    { name: 'DeepSeek Harness', desc: 'DeepSeek AI open-source agent harness: everything is a plugin. Web UI for building and orchestrating AI agents, plugins and tools.', cat: 'AI', icon: 'bot', mem: '1g', cpu: '1.0', ver: 'latest', author: 'DeepSeek AI', hp: 'https://github.com/deepseek-ai/deepseek-harness',
+      yaml: 'services:\n  app:\n    image: ghcr.io/huoxue1/deepseek-harness:latest\n    container_name: "${APP_NAME}"\n    ports:\n      - "${PORT}:3080"\n    environment:\n      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY}"\n    volumes:\n      - ./data:/root/.dsh\n    restart: unless-stopped',
+      env: { PORT: '3080', DEEPSEEK_API_KEY: '' } },
   ];
 
-  let count = 0;
+  const existing = await pool.query('SELECT name FROM app_store_entries WHERE workspace_id = $1', [WID]);
+  const existingNames = new Set(existing.rows.map((row) => row.name));
+  let inserted = 0;
+  let skipped = 0;
   for (const app of apps) {
+    if (existingNames.has(app.name)) {
+      skipped++;
+      continue;
+    }
     await pool.query(
       `INSERT INTO app_store_entries (workspace_id, name, description, category, icon, compose_yaml, default_env, memory_limit, cpu_limit, version, author, homepage, is_enabled)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,true)`,
       [WID, app.name, app.desc, app.cat, app.icon, app.yaml, JSON.stringify(app.env), app.mem, app.cpu, app.ver, app.author, app.hp]
     );
-    count++;
+    inserted++;
   }
-  console.log('Seeded:', count, 'apps');
+  console.log('Inserted:', inserted, 'skipped:', skipped, 'apps');
   const r = await pool.query('SELECT count(*) FROM app_store_entries');
   console.log('Total in DB:', r.rows[0].count);
   await pool.end();

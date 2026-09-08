@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   Search, Package, Store, Globe, FileText, GitBranch, Server as ServerIcon,
   Activity, BarChart3, LayoutGrid, RefreshCw, Lock, MessageCircle,
-  Cpu, Home, PenTool, Play, Square, RotateCcw, Trash2, Eye, EyeOff, Rocket,
+  Bot, Cpu, Home, PenTool, Play, Square, RotateCcw, Trash2, Eye, EyeOff, Rocket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,7 +38,7 @@ const iconMap: Record<string, typeof Package> = {
   "server": ServerIcon, "activity": Activity, "bar-chart": BarChart3,
   "grid": LayoutGrid, "refresh-cw": RefreshCw, "lock": Lock,
   "message-circle": MessageCircle, "cpu": Cpu, "home": Home,
-  "pen-tool": PenTool, "package": Package,
+  "pen-tool": PenTool, "bot": Bot, "package": Package,
 };
 
 interface AppStorePanelProps {

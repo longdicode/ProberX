@@ -93,6 +93,15 @@ var templates = []AppTemplate{
 		MemoryLimit: "256m",
 		CpuLimit:    "0.3",
 	},
+	{
+		ID:          "deepseek-harness",
+		Name:        "DeepSeek Harness",
+		Description: "DeepSeek AI agent harness, everything is a plugin",
+		Icon:        "bot",
+		DefaultEnv:  map[string]string{"PORT": "3080", "DEEPSEEK_API_KEY": ""},
+		MemoryLimit: "1g",
+		CpuLimit:    "1.0",
+	},
 }
 
 var composeTemplates = map[string]string{
@@ -235,6 +244,18 @@ var composeTemplates = map[string]string{
       - "${PORT}:5000"
     volumes:
       - ./data:/datastore
+    restart: unless-stopped
+`,
+	"deepseek-harness": `services:
+  app:
+    image: ghcr.io/huoxue1/deepseek-harness:latest
+    container_name: "${APP_NAME}"
+    ports:
+      - "${PORT}:3080"
+    environment:
+      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY}"
+    volumes:
+      - ./data:/root/.dsh
     restart: unless-stopped
 `,
 }
