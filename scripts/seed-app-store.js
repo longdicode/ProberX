@@ -69,8 +69,34 @@ async function main() {
       yaml: 'services:\n  app:\n    image: ghcr.io/dgtlmoon/changedetection.io:latest\n    container_name: "${APP_NAME}"\n    ports:\n      - "${PORT}:5000"\n    volumes:\n      - ./data:/datastore\n    restart: unless-stopped',
       env: { PORT: '5000' } },
     { name: 'DeepSeek Harness', desc: 'DeepSeek AI open-source agent harness: everything is a plugin. Web UI for building and orchestrating AI agents, plugins and tools.', cat: 'AI', icon: 'bot', mem: '1g', cpu: '1.0', ver: 'latest', author: 'DeepSeek AI', hp: 'https://github.com/deepseek-ai/deepseek-harness',
-      yaml: 'services:\n  app:\n    image: ghcr.io/huoxue1/deepseek-harness:latest\n    container_name: "${APP_NAME}"\n    ports:\n      - "${PORT}:3080"\n    environment:\n      DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY}"\n    volumes:\n      - ./data:/root/.dsh\n    restart: unless-stopped',
-      env: { PORT: '3080', DEEPSEEK_API_KEY: '' } },
+      yaml: `services:
+  app:
+    image: ghcr.io/huoxue1/deepseek-harness:latest
+    container_name: "\${APP_NAME}"
+    ports:
+      - "\${PORT}:3080"
+    environment:
+      DEEPSEEK_API_KEY: "\${DEEPSEEK_API_KEY}"
+      DSH_TRUSTED_HOSTS: "\${DSH_TRUSTED_HOSTS}"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        export DSH_HOME=$\${DSH_HOME:-/root/.dsh}
+        PROFILE_DIR="$$DSH_HOME/profiles/web"
+        mkdir -p "$$PROFILE_DIR"
+        touch "$$PROFILE_DIR/.harness-lark-installed"
+        sed -i 's/^\\([[:space:]]*protobufjs:\\).*$$/\\1 true/' "$$PROFILE_DIR/pnpm-workspace.yaml" 2>/dev/null || true
+        node /usr/local/bin/dsh-port-forward.js 3080 &
+        TRUSTED_ARGS=()
+        for authority in $\${DSH_TRUSTED_HOSTS:-}; do
+          TRUSTED_ARGS+=(--trusted-host "$$authority")
+        done
+        exec dsh --profile web --no-open "$\${TRUSTED_ARGS[@]}"
+    volumes:
+      - ./data:/root/.dsh
+    restart: unless-stopped`,
+      env: { PORT: '3080', DEEPSEEK_API_KEY: '', DSH_TRUSTED_HOSTS: '' } },
   ];
 
   const existing = await pool.query('SELECT name FROM app_store_entries WHERE workspace_id = $1', [WID]);

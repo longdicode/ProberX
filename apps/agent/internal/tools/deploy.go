@@ -98,7 +98,7 @@ var templates = []AppTemplate{
 		Name:        "DeepSeek Harness",
 		Description: "DeepSeek AI agent harness, everything is a plugin",
 		Icon:        "bot",
-		DefaultEnv:  map[string]string{"PORT": "3080", "DEEPSEEK_API_KEY": ""},
+		DefaultEnv:  map[string]string{"PORT": "3080", "DEEPSEEK_API_KEY": "", "DSH_TRUSTED_HOSTS": ""},
 		MemoryLimit: "1g",
 		CpuLimit:    "1.0",
 	},
@@ -254,6 +254,22 @@ var composeTemplates = map[string]string{
       - "${PORT}:3080"
     environment:
       DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY}"
+      DSH_TRUSTED_HOSTS: "${DSH_TRUSTED_HOSTS}"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        export DSH_HOME=$${DSH_HOME:-/root/.dsh}
+        PROFILE_DIR="$$DSH_HOME/profiles/web"
+        mkdir -p "$$PROFILE_DIR"
+        touch "$$PROFILE_DIR/.harness-lark-installed"
+        sed -i 's/^\([[:space:]]*protobufjs:\).*$$/\1 true/' "$$PROFILE_DIR/pnpm-workspace.yaml" 2>/dev/null || true
+        node /usr/local/bin/dsh-port-forward.js 3080 &
+        TRUSTED_ARGS=()
+        for authority in $${DSH_TRUSTED_HOSTS:-}; do
+          TRUSTED_ARGS+=(--trusted-host "$$authority")
+        done
+        exec dsh --profile web --no-open "$${TRUSTED_ARGS[@]}"
     volumes:
       - ./data:/root/.dsh
     restart: unless-stopped
