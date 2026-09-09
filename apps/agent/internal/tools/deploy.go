@@ -433,7 +433,16 @@ func DeployApp(req DeployRequest) (DeployResult, error) {
 		tmplID = "custom"
 	}
 	meta := fmt.Sprintf("template=%s\ncreated=%s\n", tmplID, time.Now().UTC().Format(time.RFC3339))
+	if strings.Contains(yaml, "deepseek-harness") {
+		meta += "whitelist_required=1\n"
+	}
 	os.WriteFile(filepath.Join(appDir, ".proberx_meta"), []byte(meta), 0644)
+
+	if strings.Contains(yaml, "deepseek-harness") {
+		if ports, err := PublishedHostPorts(appDir); err == nil {
+			applyDenyAll(appName, ports)
+		}
+	}
 
 	return DeployResult{Success: true, AppName: appName, Output: outputStr}, nil
 }
@@ -512,6 +521,11 @@ func GetDeployments() ([]DeploymentInfo, error) {
 		}
 		info.Containers = containers
 
+		info.Ports, _ = PublishedHostPorts(appDir)
+		info.Whitelist = loadSources(appDir)
+		info.WhitelistEnabled = len(info.Whitelist) > 0
+		info.WhitelistRequired = whitelistRequired(appDir)
+
 		running, exited := 0, 0
 		for _, c := range containers {
 			if c.State == "running" {
@@ -558,6 +572,8 @@ func RemoveDeployment(appName string) (DeployResult, error) {
 		cmd2.Dir = appDir
 		out, _ = cmd2.CombinedOutput()
 	}
+
+	ClearAccessWhitelist(appName)
 
 	if rmErr := os.RemoveAll(appDir); rmErr != nil {
 		return DeployResult{Success: false, AppName: appName, Output: string(out)},

@@ -11,6 +11,7 @@ Thumbs.db
 # Agent binaries (built, not committed)
 apps/agent/agent_*
 apps/agent/agent-*
+apps/agent/proberx-agent-*
 # Private configs
 frp/
 # Duplicate dir (root only)
@@ -18,7 +19,7 @@ frp/
 # Claude AI
 .claude/
 
-# 官网源码不入 GitHub（私有）
+# ?????? GitHub????
 /apps/website/
 
 # Sync/merge artifacts & backups
@@ -27,7 +28,7 @@ frp/
 /ProberX/
 # Training scratch files
 /ai-agent/
-# 软著申请材料（隐私，不入库）
+# ??????????????
 /soft_copyright_source/
 # Telegram bot runtime data (SQLite)
 apps/telegram-bot/data/

@@ -78,6 +78,8 @@ func main() {
 	mux.HandleFunc("DELETE /tools/nginx/vhosts", h.WithAuth(h.HandleToolsNginxVHostsDelete))
 	mux.HandleFunc("GET /tools/deploy/templates", h.WithAuth(h.HandleToolsDeployTemplates))
 	mux.HandleFunc("GET /tools/deploy/list", h.WithAuth(h.HandleToolsDeployList))
+	mux.HandleFunc("GET /tools/deploy/whitelist", h.WithAuth(h.HandleToolsDeployWhitelistGet))
+	mux.HandleFunc("PUT /tools/deploy/whitelist", h.WithAuth(h.HandleToolsDeployWhitelistPut))
 	mux.HandleFunc("POST /tools/deploy/deploy", h.WithAuth(h.HandleToolsDeployDeploy))
 	mux.HandleFunc("POST /tools/deploy/remove", h.WithAuth(h.HandleToolsDeployRemove))
 	mux.HandleFunc("GET /tools/deploy/logs", h.WithAuth(h.HandleToolsDeployLogs))

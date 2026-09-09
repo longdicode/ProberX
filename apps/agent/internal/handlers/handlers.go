@@ -654,6 +654,40 @@ func (c *Config) HandleToolsDeployList(w http.ResponseWriter, r *http.Request) {
 	tools.WriteOK(w, deployments)
 }
 
+// HandleToolsDeployWhitelistGet returns the access whitelist of a deployed app.
+func (c *Config) HandleToolsDeployWhitelistGet(w http.ResponseWriter, r *http.Request) {
+	appName := r.URL.Query().Get("appName")
+	if appName == "" {
+		tools.WriteError(w, http.StatusBadRequest, "appName is required")
+		return
+	}
+	info, err := tools.GetAccessWhitelist(appName)
+	if err != nil {
+		tools.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	tools.WriteOK(w, info)
+}
+
+// HandleToolsDeployWhitelistPut updates and enforces the access whitelist of a deployed app.
+func (c *Config) HandleToolsDeployWhitelistPut(w http.ResponseWriter, r *http.Request) {
+	req, err := tools.DecodeBody[tools.AccessWhitelistRequest](r)
+	if err != nil {
+		tools.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.AppName == "" {
+		tools.WriteError(w, http.StatusBadRequest, "appName is required")
+		return
+	}
+	info, err := tools.SetAccessWhitelist(req)
+	if err != nil {
+		tools.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	tools.WriteOK(w, info)
+}
+
 // HandleToolsDeployDeploy deploys a new app.
 func (c *Config) HandleToolsDeployDeploy(w http.ResponseWriter, r *http.Request) {
 	req, err := tools.DecodeBody[tools.DeployRequest](r)
@@ -1290,7 +1324,6 @@ func (c *Config) HandleToolsShellAIGenerate(w http.ResponseWriter, r *http.Reque
 	}
 	tools.WriteOK(w, result)
 }
-
 
 // HandleToolsShellAIConfig returns the current Shell AI config with API key masked.
 func (c *Config) HandleToolsShellAIConfig(w http.ResponseWriter, r *http.Request) {

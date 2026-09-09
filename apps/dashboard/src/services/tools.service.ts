@@ -178,6 +178,12 @@ export const removeDatabase = (wid: string, sid: string, body: { type: string },
 export const checkPorts = (wid: string, sid: string, body: { ports: string[] }, db: DbClient) =>
   POST<Record<string, boolean>>(wid, sid, "/tools/deploy/check-ports", { body }, db);
 
+export const getDeployWhitelist = (wid: string, sid: string, appName: string, db: DbClient) =>
+  GET(wid, sid, "/tools/deploy/whitelist", { params: { appName }, timeout: 15_000 }, db);
+
+export const saveDeployWhitelist = (wid: string, sid: string, body: { appName: string; sources: string[] }, db: DbClient) =>
+  PUT(wid, sid, "/tools/deploy/whitelist", { body, timeout: 20_000 }, db);
+
 // ── Backups ───────────────────────────────────────────────────────
 
 export const listBackups = (wid: string, sid: string, db: DbClient) =>

@@ -78,11 +78,30 @@ type DeployRequest struct {
 
 // DeploymentInfo describes a deployed app instance.
 type DeploymentInfo struct {
-	AppName    string            `json:"app_name"`
-	Template   string            `json:"template"`
-	Status     string            `json:"status"`
-	CreatedAt  string            `json:"created_at"`
-	Containers []ContainerStatus `json:"containers"`
+	AppName            string            `json:"app_name"`
+	Template           string            `json:"template"`
+	Status             string            `json:"status"`
+	CreatedAt          string            `json:"created_at"`
+	Containers         []ContainerStatus `json:"containers"`
+	Ports              []string          `json:"ports,omitempty"`
+	Whitelist          []string          `json:"whitelist,omitempty"`
+	WhitelistEnabled   bool              `json:"whitelist_enabled"`
+	WhitelistRequired  bool              `json:"whitelist_required"`
+}
+
+// AccessWhitelistRequest is the PUT body for updating an app access whitelist.
+type AccessWhitelistRequest struct {
+	AppName string   `json:"appName"`
+	Sources []string `json:"sources"`
+}
+
+// AccessWhitelistInfo describes the current access whitelist of a deployed app.
+type AccessWhitelistInfo struct {
+	AppName  string   `json:"app_name"`
+	Ports    []string `json:"ports"`
+	Sources  []string `json:"sources"`
+	Enabled  bool     `json:"enabled"`
+	Required bool     `json:"required"`
 }
 
 // ContainerStatus is a single container within a compose stack.

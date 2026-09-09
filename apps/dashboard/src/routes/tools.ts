@@ -118,6 +118,13 @@ export const toolsRoutes: FastifyPluginAsync = async (app) => {
   postRoute(app, auth, "/workspaces/:wid/servers/:id/tools/deploy/check-ports",
     (w, s, b, db) => svc.checkPorts(w, s, b, db));
 
+  getRoute(app, auth, "/workspaces/:wid/servers/:id/tools/deploy/whitelist",
+    (w, s, q, db) => svc.getDeployWhitelist(w, s, q?.appName, db));
+  app.put("/workspaces/:wid/servers/:id/tools/deploy/whitelist", auth, async (req, reply) => {
+    const { wid, id } = req.params as { wid: string; id: string };
+    return reply.send(await svc.saveDeployWhitelist(wid, id, req.body as any, app.db));
+  });
+
   // Databases
   getRoute(app, auth, "/workspaces/:wid/servers/:id/tools/databases",
     (w, s, _q, db) => svc.listDatabases(w, s, db));

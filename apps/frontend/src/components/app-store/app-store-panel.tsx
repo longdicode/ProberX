@@ -6,6 +6,7 @@ import {
   Search, Package, Store, Globe, FileText, GitBranch, Server as ServerIcon,
   Activity, BarChart3, LayoutGrid, RefreshCw, Lock, MessageCircle,
   Bot, Cpu, Home, PenTool, Play, Square, RotateCcw, Trash2, Eye, EyeOff, Rocket,
+  ExternalLink, Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { api } from "@/lib/api-client";
 import { useLocale } from "@/stores/locale-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { useAppStore, type AppStoreEntry } from "@/hooks/use-api";
+import { useAppStore, useServers, type AppStoreEntry } from "@/hooks/use-api";
 import { PageSkeleton } from "@/components/shared/loading-skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
@@ -48,6 +49,8 @@ interface AppStorePanelProps {
 
 export function AppStorePanel({ serverId, workspaceId }: AppStorePanelProps) {
   const { t } = useLocale();
+  const { data: servers } = useServers(workspaceId);
+  const serverHost = (servers?.find((s) => s.id === serverId)?.hostInfo?.agent_host as string | undefined) ?? "";
   const [tab, setTab] = useState<"catalog" | "installed">("catalog");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
@@ -76,6 +79,10 @@ export function AppStorePanel({ serverId, workspaceId }: AppStorePanelProps) {
   const [logContent, setLogContent] = useState<Record<string, string>>({});
   const [removeTarget, setRemoveTarget] = useState<{ name: string } | null>(null);
   const [actionLoading, setActionLoading] = useState<{ name: string; action: string } | null>(null);
+  const [wlTarget, setWlTarget] = useState<any | null>(null);
+  const [wlText, setWlText] = useState("");
+  const [wlSaving, setWlSaving] = useState(false);
+  const [wlError, setWlError] = useState("");
 
   const ep = (path: string) => `/workspaces/${workspaceId}/servers/${serverId}${path}`;
 
@@ -173,6 +180,49 @@ export function AppStorePanel({ serverId, workspaceId }: AppStorePanelProps) {
     } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
     finally { setActionLoading(null); }
   };
+
+  const openDeployedApp = (d: any) => {
+    const port = Array.isArray(d?.ports) && d.ports.length > 0 ? d.ports[0] : "";
+    if (!serverHost || !port) return;
+    window.open(`http://${serverHost}:${port}`, "_blank", "noopener,noreferrer");
+  };
+
+  const openWhitelistDialog = (d: any) => {
+    setWlTarget(d);
+    setWlText((Array.isArray(d?.whitelist) ? d.whitelist : []).join("\n"));
+    setWlError("");
+  };
+
+  const saveWhitelist = async () => {
+    if (!wlTarget) return;
+    const sources = wlText.split(/[\n,，;；\s]+/).map((s) => s.trim()).filter(Boolean);
+    setWlSaving(true);
+    setWlError("");
+    try {
+      await api.put(ep("/tools/deploy/whitelist"), { appName: wlTarget.app_name, sources });
+      toast.success(sources.length > 0 ? `已保存访问白名单（${sources.length} 条）` : "已清除访问白名单（不限制来源）");
+      setWlTarget(null);
+      await fetchDeployments();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "保存失败";
+      setWlError(msg);
+      toast.error(`白名单保存失败: ${msg}`);
+    } finally {
+      setWlSaving(false);
+    }
+  };
+
+  const canOpenApp = (d: any) =>
+    d?.status === "running" &&
+    !!serverHost &&
+    Array.isArray(d?.ports) &&
+    d.ports.length > 0 &&
+    !(d.whitelist_required && !(Array.isArray(d?.whitelist) && d.whitelist.length > 0));
+
+  const whitelistGateMessage = (d: any) =>
+    d?.whitelist_required && !(Array.isArray(d?.whitelist) && d.whitelist.length > 0)
+      ? "该应用需要先设置访问白名单才能打开（含敏感凭证）"
+      : "";
 
   const toggleLogs = async (appName: string) => {
     if (expandedLogs === appName) { setExpandedLogs(null); return; }
@@ -272,8 +322,27 @@ export function AppStorePanel({ serverId, workspaceId }: AppStorePanelProps) {
                       <span className="font-semibold text-sm">{d.app_name}</span>
                       <Badge variant="secondary" className="text-xs">{d.template || "custom"}</Badge>
                       <Badge variant={d.status === "running" ? "default" : d.status === "stopped" ? "secondary" : "destructive"} className="text-xs">{d.status}</Badge>
+                      {d.whitelist_enabled && (
+                        <Badge variant="secondary" className="text-xs">
+                          <Shield className="w-3 h-3 mr-1" />白名单 {d.whitelist?.length}
+                        </Badge>
+                      )}
+                      {d.whitelist_required && !(Array.isArray(d?.whitelist) && d.whitelist.length > 0) && (
+                        <Badge variant="destructive" className="text-xs">未设白名单</Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-1 flex-wrap">
+                      <Button size="sm" variant="ghost" className="h-7 text-xs"
+                        onClick={() => openDeployedApp(d)}
+                        disabled={!canOpenApp(d)}
+                        title={whitelistGateMessage(d) || (canOpenApp(d) ? `打开 http://${serverHost}:${d?.ports?.[0]}` : "")}>
+                        <ExternalLink className="w-3 h-3 mr-1" />打开
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs"
+                        onClick={() => openWhitelistDialog(d)}
+                        title={d.whitelist_required ? "该应用含敏感凭证，建议仅放行可信 IP" : "可选：仅允许指定 IP/网段访问"}>
+                        <Shield className="w-3 h-3 mr-1" />白名单
+                      </Button>
                       <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => toggleLogs(d.app_name)}>
                         {expandedLogs === d.app_name ? <EyeOff className="w-3 h-3 mr-1" /> : <Eye className="w-3 h-3 mr-1" />}
                         {expandedLogs === d.app_name ? "隐藏" : "日志"}
@@ -369,6 +438,49 @@ export function AppStorePanel({ serverId, workspaceId }: AppStorePanelProps) {
                 </Button>
               </>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Access Whitelist Dialog */}
+      <Dialog open={!!wlTarget} onOpenChange={(open) => { if (!open && !wlSaving) { setWlTarget(null); setWlError(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="w-4 h-4" />访问白名单: {wlTarget?.app_name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">对外端口:</span>
+              <span className="font-mono">{Array.isArray(wlTarget?.ports) ? wlTarget.ports.join(", ") : "-"}</span>
+              {wlTarget?.required && (
+                <Badge variant="destructive" className="text-xs">必须设置才能打开</Badge>
+              )}
+            </div>
+            <div>
+              <Label className="mb-1.5 block">允许访问的 IP / 网段（每行一个，支持逗号分隔）</Label>
+              <textarea
+                value={wlText}
+                onChange={(e) => setWlText(e.target.value)}
+                rows={5}
+                placeholder={"1.2.3.4\n10.0.0.0/8\n"}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+                disabled={wlSaving}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                {wlTarget?.required
+                  ? "该应用包含敏感凭证，未设置白名单时不可打开；留空保存表示拒绝所有来源，请至少填入你的公网 IP。"
+                  : "留空保存 = 不限制来源（默认对外开放）。"}
+              </p>
+            </div>
+            {wlError && <p className="text-xs text-destructive">{wlError}</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWlTarget(null)} disabled={wlSaving}>取消</Button>
+            <Button onClick={saveWhitelist} disabled={wlSaving || !wlTarget}>
+              {wlSaving ? "保存中..." : "保存并应用"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
