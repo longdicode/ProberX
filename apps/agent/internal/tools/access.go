@@ -208,9 +208,17 @@ func applyAppRules(appName string, ports, sources []string) error {
 	defer cancel()
 	tag := iptablesTag(appName)
 	for _, port := range ports {
-		drop := []string{"-I", "DOCKER-USER", "-p", "tcp", "-m", "conntrack", "--ctorigdstport", port, "-j", "DROP",
+		// Only NEW connections from non-whitelisted sources are dropped. The
+		// RELATED,ESTABLISHED ACCEPT below lets replies to whitelisted clients
+		// return to the caller through Docker's forward path.
+		drop := []string{"-I", "DOCKER-USER", "-p", "tcp", "-m", "conntrack", "--ctorigdstport", port, "--ctstate", "NEW", "-j", "DROP",
 			"-m", "comment", "--comment", tag}
 		if err := runIptables(ctx, drop...); err != nil {
+			return err
+		}
+		established := []string{"-I", "DOCKER-USER", "-p", "tcp", "-m", "conntrack", "--ctorigdstport", port,
+			"--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT", "-m", "comment", "--comment", tag}
+		if err := runIptables(ctx, established...); err != nil {
 			return err
 		}
 		for _, source := range sources {
