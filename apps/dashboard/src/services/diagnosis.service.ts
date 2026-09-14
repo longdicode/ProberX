@@ -117,7 +117,9 @@ export const DIAGNOSIS_TOOLS: Record<string, { desc: string; build: ToolBuild }>
         const tail = clampInt(a.tail, 10, 500, 100);
         return `docker logs --tail ${tail} ${name} 2>&1 | head -120`;
       }
-      return 'docker ps -a --format "table {{.Names}}\\t{{.Status}}\\t{{.Image}}" | head -40';
+      // Include PORTS: without it the planner cannot tie a container to the
+      // port it serves, and it re-runs the same listing hoping for more.
+      return 'docker ps -a --format "table {{.Names}}\\t{{.Status}}\\t{{.Image}}\\t{{.Ports}}" | head -40';
     },
   },
   logs: {
