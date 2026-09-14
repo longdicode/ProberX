@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -438,13 +439,17 @@ func DeployApp(req DeployRequest) (DeployResult, error) {
 	}
 	os.WriteFile(filepath.Join(appDir, ".proberx_meta"), []byte(meta), 0644)
 
-	if strings.Contains(yaml, "deepseek-harness") {
-		if ports, err := PublishedHostPorts(appDir); err == nil {
-			applyDenyAll(appName, ports)
-		}
+	// Apply the access policy of the app (deny-all for apps that require a
+	// whitelist). A failure has to be visible: the container is running but not
+	// protected yet, and the reconciler keeps retrying in the background.
+	warning := ""
+	if err := enforceWhitelistState(appName, appDir); err != nil {
+		warning = fmt.Sprintf("访问白名单强制失败，应用当前未受保护，将自动重试: %v", err)
+		log.Printf("deploy %s: whitelist enforcement failed: %v", appName, err)
+		outputStr += "\n" + warning
 	}
 
-	return DeployResult{Success: true, AppName: appName, Output: outputStr}, nil
+	return DeployResult{Success: true, AppName: appName, Output: outputStr, Warning: warning}, nil
 }
 
 func GetDeployments() ([]DeploymentInfo, error) {
@@ -573,14 +578,22 @@ func RemoveDeployment(appName string) (DeployResult, error) {
 		out, _ = cmd2.CombinedOutput()
 	}
 
-	ClearAccessWhitelist(appName)
+	warning := ""
+	if err := ClearAccessWhitelist(appName); err != nil {
+		warning = fmt.Sprintf("防火墙规则清理失败，可能存在残留规则: %v", err)
+		log.Printf("remove %s: clearing firewall rules failed: %v", appName, err)
+	}
+	outStr := string(out)
+	if warning != "" {
+		outStr += "\n" + warning
+	}
 
 	if rmErr := os.RemoveAll(appDir); rmErr != nil {
-		return DeployResult{Success: false, AppName: appName, Output: string(out)},
+		return DeployResult{Success: false, AppName: appName, Output: outStr},
 			fmt.Errorf("remove directory failed: %w", rmErr)
 	}
 
-	return DeployResult{Success: true, AppName: appName, Output: string(out)}, nil
+	return DeployResult{Success: true, AppName: appName, Output: outStr, Warning: warning}, nil
 }
 
 func GetDeploymentLogs(appName string) (map[string]string, error) {

@@ -10,10 +10,15 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 const accessWhitelistFile = "access.json"
+
+// accessMu serialises firewall mutations so that the reconciler and API writes
+// can never interleave a clear/apply sequence.
+var accessMu sync.Mutex
 
 // normalizeAppName validates and normalizes a deployed app name.
 func normalizeAppName(appName string) (string, error) {
@@ -26,92 +31,6 @@ func normalizeAppName(appName string) (string, error) {
 
 func appDir(name string) string {
 	return filepath.Join(appsDir, name)
-}
-
-// readDotEnv parses the agent-written .env file into a map.
-func readDotEnv(dir string) map[string]string {
-	env := map[string]string{}
-	data, err := os.ReadFile(filepath.Join(dir, ".env"))
-	if err != nil {
-		return env
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		kv := strings.SplitN(line, "=", 2)
-		if len(kv) == 2 {
-			env[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
-		}
-	}
-	return env
-}
-
-// resolvePortValue resolves a compose port host field (either a number or an
-// env reference such as ${PORT} or $PORT) against the app .env file.
-func resolvePortValue(field string, env map[string]string) (string, bool) {
-	field = strings.TrimSpace(field)
-	if field == "" {
-		return "", false
-	}
-	if strings.HasPrefix(field, "${") && strings.HasSuffix(field, "}") {
-		field = strings.TrimSuffix(strings.TrimPrefix(field, "${"), "}")
-	}
-	if strings.HasPrefix(field, "$") {
-		field = strings.TrimPrefix(field, "$")
-	}
-	if strings.Contains(field, "$") {
-		return "", false
-	}
-	if v, ok := env[field]; ok {
-		field = strings.TrimSpace(v)
-	}
-	if _, err := strconv.Atoi(field); err != nil {
-		return "", false
-	}
-	return field, true
-}
-
-// PublishedHostPorts returns the stable host ports published by an app's
-// docker-compose.yml (env values resolved from the app .env file).
-func PublishedHostPorts(dir string) ([]string, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "docker-compose.yml"))
-	if err != nil {
-		return nil, err
-	}
-	env := readDotEnv(dir)
-	seen := map[string]bool{}
-	var ports []string
-	for _, line := range strings.Split(string(data), "\n") {
-		trimmed := strings.TrimSpace(line)
-		if !strings.HasPrefix(trimmed, "-") {
-			continue
-		}
-		entry := strings.Trim(strings.TrimSpace(strings.TrimPrefix(trimmed, "-")), `"' `)
-		if entry == "" {
-			continue
-		}
-		parts := strings.Split(entry, ":")
-		if len(parts) == 1 {
-			continue // container-only port: host port is random
-		}
-		hostField := parts[0]
-		if len(parts) == 3 {
-			hostField = parts[1] // ip:host:container form
-		}
-		port, ok := resolvePortValue(hostField, env)
-		if !ok || seen[port] {
-			continue
-		}
-		n, err := strconv.Atoi(port)
-		if err != nil || n < 1 || n > 65535 {
-			continue
-		}
-		seen[port] = true
-		ports = append(ports, port)
-	}
-	return ports, nil
 }
 
 func loadSources(dir string) []string {
@@ -159,14 +78,14 @@ func runIptables(ctx context.Context, args ...string) error {
 	return nil
 }
 
-// clearAppRules removes every iptables rule tagged for this app.
-func clearAppRules(appName string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
+// clearAppRules removes every iptables rule tagged for this app. Failures are
+// returned to the caller: swallowing them would leave stale rules behind and
+// hide a broken firewall from the operator.
+func clearAppRules(ctx context.Context, appName string) error {
 	cmd := exec.CommandContext(ctx, "iptables", "-w", "-L", "DOCKER-USER", "-n", "--line-numbers")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil // docker/iptables not ready: nothing to clear
+		return fmt.Errorf("iptables -L DOCKER-USER: %v: %s", err, strings.TrimSpace(string(out)))
 	}
 	tag := iptablesTag(appName)
 	var numbers []int
@@ -182,7 +101,9 @@ func clearAppRules(appName string) error {
 		}
 	}
 	for i := len(numbers) - 1; i >= 0; i-- {
-		runIptables(ctx, "-D", "DOCKER-USER", strconv.Itoa(numbers[i]))
+		if err := runIptables(ctx, "-D", "DOCKER-USER", strconv.Itoa(numbers[i])); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -197,22 +118,22 @@ func validSource(source string) bool {
 
 // applyAppRules enforces the whitelist for the app's published ports in the
 // DOCKER-USER chain (consulted before Docker's own FORWARD rules).
-func applyAppRules(appName string, ports, sources []string) error {
-	if err := clearAppRules(appName); err != nil {
+//
+// Rule order matters: the source ACCEPTs and the RELATED,ESTABLISHED ACCEPT
+// must sit above the DROP, and the DROP must only match NEW connections.
+// Otherwise the reply packets - whose source is the container, not the allowed
+// client - are dropped as well and no client can complete a handshake.
+func applyAppRules(ctx context.Context, appName string, ports, sources []string) error {
+	if err := clearAppRules(ctx, appName); err != nil {
 		return err
 	}
 	if len(sources) == 0 {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
 	tag := iptablesTag(appName)
 	for _, port := range ports {
-		// Only NEW connections from non-whitelisted sources are dropped. The
-		// RELATED,ESTABLISHED ACCEPT below lets replies to whitelisted clients
-		// return to the caller through Docker's forward path.
-		drop := []string{"-I", "DOCKER-USER", "-p", "tcp", "-m", "conntrack", "--ctorigdstport", port, "--ctstate", "NEW", "-j", "DROP",
-			"-m", "comment", "--comment", tag}
+		drop := []string{"-I", "DOCKER-USER", "-p", "tcp", "-m", "conntrack", "--ctorigdstport", port,
+			"--ctstate", "NEW", "-j", "DROP", "-m", "comment", "--comment", tag}
 		if err := runIptables(ctx, drop...); err != nil {
 			return err
 		}
@@ -222,8 +143,8 @@ func applyAppRules(appName string, ports, sources []string) error {
 			return err
 		}
 		for _, source := range sources {
-			accept := []string{"-I", "DOCKER-USER", "-p", "tcp", "-m", "conntrack", "--ctorigdstport", port, "-s", source,
-				"-j", "ACCEPT", "-m", "comment", "--comment", tag}
+			accept := []string{"-I", "DOCKER-USER", "-p", "tcp", "-m", "conntrack", "--ctorigdstport", port,
+				"-s", source, "-j", "ACCEPT", "-m", "comment", "--comment", tag}
 			if err := runIptables(ctx, accept...); err != nil {
 				return err
 			}
@@ -234,19 +155,17 @@ func applyAppRules(appName string, ports, sources []string) error {
 
 // applyDenyAll drops every external source for the given host ports (the
 // secure default for apps that require an access whitelist).
-func applyDenyAll(appName string, ports []string) error {
-	if err := clearAppRules(appName); err != nil {
+func applyDenyAll(ctx context.Context, appName string, ports []string) error {
+	if err := clearAppRules(ctx, appName); err != nil {
 		return err
 	}
 	if len(ports) == 0 {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
 	tag := iptablesTag(appName)
 	for _, port := range ports {
-		drop := []string{"-I", "DOCKER-USER", "-p", "tcp", "-m", "conntrack", "--ctorigdstport", port, "-j", "DROP",
-			"-m", "comment", "--comment", tag}
+		drop := []string{"-I", "DOCKER-USER", "-p", "tcp", "-m", "conntrack", "--ctorigdstport", port,
+			"-j", "DROP", "-m", "comment", "--comment", tag}
 		if err := runIptables(ctx, drop...); err != nil {
 			return err
 		}
@@ -267,6 +186,8 @@ func metaFlag(dir, key string) bool {
 	return false
 }
 
+// whitelistRequired reports whether an app must always have an explicit
+// whitelist (it carries secrets such as API keys).
 func whitelistRequired(dir string) bool {
 	if metaFlag(dir, "whitelist_required") {
 		return true
@@ -276,6 +197,63 @@ func whitelistRequired(dir string) bool {
 		return false
 	}
 	return strings.Contains(string(data), "deepseek-harness")
+}
+
+// enforcementAction is the firewall state an app should be in.
+type enforcementAction int
+
+const (
+	// enforceClear removes every rule: the app is open and has no whitelist.
+	enforceClear enforcementAction = iota
+	// enforceRules keeps the app reachable only from the whitelisted sources.
+	enforceRules
+	// enforceDenyAll blocks every external source.
+	enforceDenyAll
+)
+
+// resolveEnforcement maps the stored whitelist state to the firewall state.
+func resolveEnforcement(sources []string, required bool) enforcementAction {
+	if len(sources) > 0 {
+		return enforceRules
+	}
+	if required {
+		return enforceDenyAll
+	}
+	return enforceClear
+}
+
+// enforceWhitelistState brings the firewall rules of one app in line with the
+// whitelist stored on disk. It is the single entry point shared by deploy,
+// API writes and the start-up reconciler.
+func enforceWhitelistState(appName, dir string) error {
+	sources := loadSources(dir)
+	action := resolveEnforcement(sources, whitelistRequired(dir))
+
+	var ports []string
+	if action != enforceClear {
+		var err error
+		ports, err = PublishedHostPorts(dir)
+		if err != nil {
+			return fmt.Errorf("cannot determine published ports: %w", err)
+		}
+		if len(ports) == 0 {
+			return fmt.Errorf("app %q publishes no host port to protect", appName)
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	accessMu.Lock()
+	defer accessMu.Unlock()
+
+	switch action {
+	case enforceRules:
+		return applyAppRules(ctx, appName, ports, sources)
+	case enforceDenyAll:
+		return applyDenyAll(ctx, appName, ports)
+	default:
+		return clearAppRules(ctx, appName)
+	}
 }
 
 // GetAccessWhitelist returns the access whitelist state of a deployed app.
@@ -303,6 +281,8 @@ func GetAccessWhitelist(appName string) (AccessWhitelistInfo, error) {
 }
 
 // SetAccessWhitelist stores and enforces the whitelist of a deployed app.
+// The firewall is updated before the file is written so that a failed rule
+// change never gets recorded as a successful one.
 func SetAccessWhitelist(req AccessWhitelistRequest) (AccessWhitelistInfo, error) {
 	name, err := normalizeAppName(req.AppName)
 	if err != nil {
@@ -316,6 +296,7 @@ func SetAccessWhitelist(req AccessWhitelistRequest) (AccessWhitelistInfo, error)
 	if err != nil || len(ports) == 0 {
 		return AccessWhitelistInfo{}, fmt.Errorf("app %q has no published ports to protect", name)
 	}
+
 	var sources []string
 	seen := map[string]bool{}
 	for _, s := range req.Sources {
@@ -329,13 +310,21 @@ func SetAccessWhitelist(req AccessWhitelistRequest) (AccessWhitelistInfo, error)
 		seen[s] = true
 		sources = append(sources, s)
 	}
-	if len(sources) == 0 && whitelistRequired(dir) {
-		if err := applyDenyAll(name, ports); err != nil {
+
+	required := whitelistRequired(dir)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	accessMu.Lock()
+	defer accessMu.Unlock()
+
+	if resolveEnforcement(sources, required) == enforceDenyAll {
+		if err := applyDenyAll(ctx, name, ports); err != nil {
 			return AccessWhitelistInfo{}, err
 		}
-	} else if err := applyAppRules(name, ports, sources); err != nil {
+	} else if err := applyAppRules(ctx, name, ports, sources); err != nil {
 		return AccessWhitelistInfo{}, err
 	}
+
 	if err := storeSources(dir, sources); err != nil {
 		return AccessWhitelistInfo{}, err
 	}
@@ -344,13 +333,19 @@ func SetAccessWhitelist(req AccessWhitelistRequest) (AccessWhitelistInfo, error)
 		Ports:    ports,
 		Sources:  sources,
 		Enabled:  len(sources) > 0,
-		Required: whitelistRequired(dir),
+		Required: required,
 	}, nil
 }
 
 // ClearAccessWhitelist removes firewall rules for a removed app.
-func ClearAccessWhitelist(appName string) {
-	if name, err := normalizeAppName(appName); err == nil {
-		clearAppRules(name)
+func ClearAccessWhitelist(appName string) error {
+	name, err := normalizeAppName(appName)
+	if err != nil {
+		return nil
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	accessMu.Lock()
+	defer accessMu.Unlock()
+	return clearAppRules(ctx, name)
 }

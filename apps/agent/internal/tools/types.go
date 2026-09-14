@@ -116,6 +116,7 @@ type DeployResult struct {
 	Success bool   `json:"success"`
 	AppName string `json:"app_name"`
 	Output  string `json:"output"`
+	Warning string `json:"warning,omitempty"`
 }
 
 // NginxStatus holds nginx service status and config info.

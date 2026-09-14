@@ -12,6 +12,7 @@ import (
 
 	"github.com/proberx/agent/internal/handlers"
 	"github.com/proberx/agent/internal/loops"
+	"github.com/proberx/agent/internal/tools"
 	"github.com/proberx/agent/internal/upgrade"
 )
 
@@ -142,6 +143,10 @@ func main() {
 	go loops.RegisterLoop(dashboardUrl, agentId, agentToken, agentHost)
 	go loops.HeartbeatLoop(dashboardUrl, agentId)
 	go loops.MetricsPushLoop(dashboardUrl, agentId)
+
+	// Re-apply access whitelists: iptables rules do not survive a reboot, and a
+	// silently dropped whitelist would expose protected apps to the internet.
+	go tools.StartAccessReconciler(context.Background(), 5*time.Minute)
 
 	// Start upgrade checker
 	upgradeRepo := os.Getenv("UPGRADE_REPO")
