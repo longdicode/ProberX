@@ -481,7 +481,7 @@ export interface DiagnosisRun {
   title: string;
   goal: string;
   trigger: "manual" | "auto";
-  status: "running" | "success" | "failed" | "stopped";
+  status: "queued" | "running" | "success" | "failed" | "stopped";
   steps: DiagnosisStep[];
   rootCause: string | null;
   confidence: number | null;
@@ -495,6 +495,7 @@ export interface DiagnosisRun {
   similarCases?: DiagnosisSimilarCase[];
   evidenceFingerprint?: string | null;
   evidenceVerified?: boolean | null;
+  queuePosition?: number;
 }
 
 export function useDiagnoses(workspaceId: string | undefined) {
@@ -512,7 +513,7 @@ export function useDiagnosis(workspaceId: string | undefined, runId: string | un
     enabled: !!workspaceId && !!runId,
     refetchInterval: (query) => {
       const status = (query.state.data as DiagnosisRun | undefined)?.status;
-      return status === "running" ? 4000 : false;
+      return status === "running" || status === "queued" ? 4000 : false;
     },
   });
 }

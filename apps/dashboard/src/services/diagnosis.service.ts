@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, ne } from "drizzle-orm";
+import { and, desc, eq, lt, ne, or } from "drizzle-orm";
 import { diagnosisRuns } from "../db/schema/diagnosis-runs";
 import { servers } from "../db/schema/servers";
 import { AppError } from "../utils/errors";
@@ -11,6 +11,7 @@ import { resolveAiLlm } from "./ai-settings.service";
 import type { AiLlmOverrides } from "./ai-settings.service";
 import { expertDef } from "./expert-agents";
 import type { ExpertAgentDef } from "./expert-agents";
+import * as queue from "./diagnosis-queue";
 
 // Types
 
@@ -926,12 +927,102 @@ async function recoverStaleRuns(db: DbClient, serverId?: string) {
   if (rows.length) console.warn(`[diagnosis] recovered ${rows.length} stale running run(s)`);
 }
 
-export async function startDiagnosis(
+/** Options shared by every diagnosis entry point. */
+export interface DiagnosisOptions {
+  goal: string;
+  title?: string;
+  trigger?: "manual" | "auto";
+  expertId?: string;
+  context?: string;
+  onProgress?: (p: { label: string; detail?: string; current: number; total: number }) => void;
+}
+
+// The scheduler lives in this process, so nothing can legitimately be running
+// or waiting when it starts: any row left in those states was orphaned by a
+// crash, restart or deploy. Close them out once, otherwise a stale "running"
+// row blocks that server (the worker checks for one) until the 30-minute
+// stale-run timeout. Assumes a single dashboard process, which is how the
+// in-memory queue is designed to run.
+let orphanedRunsRecovered = false;
+
+/**
+ * Closes out runs orphaned by a restart. Called once when the server boots so
+ * the panel never keeps showing a run as "running" after the worker died;
+ * also called lazily by createDiagnosisRun as a safety net.
+ */
+export async function recoverOrphanedRuns(db: DbClient) {
+  if (orphanedRunsRecovered) return;
+  orphanedRunsRecovered = true;
+  try {
+    const rows = await db
+      .update(diagnosisRuns)
+      .set({
+        status: "failed",
+        error: "排查在服务重启后中断，请重新发起",
+        finishedAt: new Date(),
+      })
+      .where(or(eq(diagnosisRuns.status, "queued"), eq(diagnosisRuns.status, "running")))
+      .returning({ id: diagnosisRuns.id });
+    if (rows.length) console.warn(`[diagnosis] recovered ${rows.length} orphaned run(s)`);
+  } catch (err) {
+    console.error("[diagnosis] failed to recover orphaned runs:", (err as Error).message);
+  }
+}
+
+/**
+ * Creates the run row before any slow work happens (LLM resolution, memory
+ * recall) so callers can return immediately while the run waits in the queue.
+ */
+export async function createDiagnosisRun(
   workspaceId: string,
   serverId: string,
-  opts: { goal: string; title?: string; trigger?: "manual" | "auto"; expertId?: string; context?: string; onProgress?: (p: { label: string; detail?: string; current: number; total: number }) => void },
+  opts: DiagnosisOptions,
   db: DbClient
 ) {
+  const [server] = await db
+    .select({ name: servers.name })
+    .from(servers)
+    .where(and(eq(servers.id, serverId), eq(servers.workspaceId, workspaceId)))
+    .limit(1);
+  if (!server) throw AppError.notFound("Server", serverId);
+
+  await recoverOrphanedRuns(db);
+
+  const expert = opts.expertId ? expertDef(opts.expertId) : null;
+  const runId = crypto.randomUUID();
+  const title = opts.title || `自主排查：${server.name}`;
+  await db.insert(diagnosisRuns).values({
+    id: runId,
+    workspaceId,
+    serverId,
+    title,
+    goal: opts.goal,
+    status: "queued",
+    trigger: opts.trigger ?? "manual",
+    expertType: expert?.id ?? null,
+  });
+  return { id: runId, title };
+}
+
+/**
+ * Executes a queued diagnosis to completion. This is the worker entry point
+ * started by the scheduler, never a request handler.
+ */
+export async function executeDiagnosisRun(
+  runId: string,
+  workspaceId: string,
+  serverId: string,
+  opts: DiagnosisOptions,
+  db: DbClient
+) {
+  const [run] = await db
+    .select({ title: diagnosisRuns.title, status: diagnosisRuns.status })
+    .from(diagnosisRuns)
+    .where(eq(diagnosisRuns.id, runId))
+    .limit(1);
+  if (!run) return { id: runId, status: "failed" as const, steps: 0 };
+  if (run.status === "stopped") return { id: runId, status: "stopped" as const, steps: 0 };
+
   const [server] = await db
     .select({ name: servers.name, hostInfo: servers.hostInfo })
     .from(servers)
@@ -948,17 +1039,32 @@ export async function startDiagnosis(
   // Recover runs orphaned by a previous crash/restart before checking for active ones.
   await recoverStaleRuns(db, serverId);
 
-  const [active] = await db
-    .select({ id: diagnosisRuns.id })
-    .from(diagnosisRuns)
-    .where(and(eq(diagnosisRuns.serverId, serverId), eq(diagnosisRuns.status, "running")))
-    .limit(1);
-  if (active) throw AppError.badRequest("该服务器已有进行中的自主排查，请等待完成后重试");
+  // Safety net for runs started outside this process (another replica, or a
+  // row left behind by a crash). The queue already serialises this server.
+  if (queue.MAX_PER_SERVER <= 1) {
+    const [active] = await db
+      .select({ id: diagnosisRuns.id })
+      .from(diagnosisRuns)
+      .where(
+        and(
+          eq(diagnosisRuns.serverId, serverId),
+          eq(diagnosisRuns.status, "running"),
+          ne(diagnosisRuns.id, runId)
+        )
+      )
+      .limit(1);
+    if (active) {
+      await db
+        .update(diagnosisRuns)
+        .set({ status: "failed", error: "该服务器已有进行中的自主排查", finishedAt: new Date() })
+        .where(eq(diagnosisRuns.id, runId));
+      throw AppError.badRequest("该服务器已有进行中的自主排查，请等待完成后重试");
+    }
+  }
 
-  const runId = crypto.randomUUID();
   const hostInfo = (server.hostInfo as Record<string, unknown>) ?? {};
   const host = (hostInfo.agent_host as string) || "";
-  const title = opts.title || `自主排查：${server.name}`;
+  const title = run.title || opts.title || `自主排查：${server.name}`;
   // 记忆向量检索：先召回同服务器的历史相似案例，作为规划提示（仅参考，不作为证据）
   const memHits = await recallMemory(db, { workspaceId, serverId, query: opts.goal, topK: 5, minScore: 0.32 });
   const memoryNote = memHits.length
@@ -976,16 +1082,10 @@ export async function startDiagnosis(
     : "";
   const memoryNoteFull = memoryNote + contextNote;
 
-  await db.insert(diagnosisRuns).values({
-    id: runId,
-    workspaceId,
-    serverId,
-    title,
-    goal: opts.goal,
-    status: "running",
-    trigger: opts.trigger ?? "manual",
-    expertType: expert?.id ?? null,
-  });
+  await db
+    .update(diagnosisRuns)
+    .set({ status: "running", startedAt: new Date() })
+    .where(eq(diagnosisRuns.id, runId));
 
   const steps: DiagnosisStep[] = [];
   const started = Date.now();
@@ -1308,6 +1408,47 @@ export async function startDiagnosis(
 }
 
 // --- 复检闭环：诊断完成后按需重跑只读验证，判定“已恢复/仍异常/无法核实” ---
+/**
+ * Starts a diagnosis and waits for it to finish. Used by the agent chat, which
+ * needs the outcome to answer in the conversation.
+ */
+export async function startDiagnosis(
+  workspaceId: string,
+  serverId: string,
+  opts: DiagnosisOptions,
+  db: DbClient
+) {
+  const { id } = await createDiagnosisRun(workspaceId, serverId, opts, db);
+  const { done } = queue.submit({ runId: id, workspaceId, serverId }, () =>
+    executeDiagnosisRun(id, workspaceId, serverId, opts, db)
+  );
+  return (await done) as { id: string; status: string; steps?: number; memoryHits?: unknown };
+}
+
+/**
+ * Starts a diagnosis without waiting for it: the HTTP route can answer at once
+ * and the client polls the run row while it waits in the queue and then runs.
+ */
+export async function enqueueDiagnosis(
+  workspaceId: string,
+  serverId: string,
+  opts: DiagnosisOptions,
+  db: DbClient
+) {
+  const { id } = await createDiagnosisRun(workspaceId, serverId, opts, db);
+  const { position, done } = queue.submit({ runId: id, workspaceId, serverId }, () =>
+    executeDiagnosisRun(id, workspaceId, serverId, opts, db)
+  );
+  // The route returns immediately, so failures have to be reported here.
+  done.catch((err) => console.error(`[diagnosis] run ${id} failed:`, (err as Error).message));
+  return { id, status: position > 0 ? ("queued" as const) : ("running" as const), queuePosition: position };
+}
+
+/** Queue depth and back-pressure limits, for the panel. */
+export function diagnosisQueueSnapshot() {
+  return queue.snapshot();
+}
+
 
 const VERIFY_SYSTEM_PROMPT = `你是 ProberX 的复检裁判。系统刚刚对一次“自主排查”的目标服务器重新执行了若干只读复检命令（全部为白名单只读命令）。
 请结合原始问题、原根因结论、修复建议与最新的复检输出，判断故障是否已经恢复。
@@ -1449,7 +1590,8 @@ export function buildRepairPlan(run: {
 export async function verifyDiagnosis(workspaceId: string, runId: string, db: DbClient) {
   const run = await getRun(workspaceId, runId, db);
   if (!run.serverId) throw AppError.badRequest("该排查未关联服务器，无法复检");
-  if (run.status === "running") throw AppError.badRequest("排查仍在进行中，请等待完成后再复检");
+  if (run.status === "running" || run.status === "queued")
+    throw AppError.badRequest("排查尚未完成，请等待完成后再复检");
   if (run.status !== "success") throw AppError.badRequest("仅支持对已完成（success）的排查进行复检");
 
   // AI 接口可配置到工作区设置；未启用时自动回退服务器环境变量
@@ -1603,7 +1745,8 @@ export async function executeRepair(
 ) {
   const run = await getRun(workspaceId, runId, db);
   if (!run.serverId) throw AppError.badRequest("该排查未关联服务器，无法执行修复");
-  if (run.status === "running") throw AppError.badRequest("排查仍在进行中，请等待完成后再执行修复");
+  if (run.status === "running" || run.status === "queued")
+    throw AppError.badRequest("排查尚未完成，请等待完成后再执行修复");
   if (run.status !== "success") throw AppError.badRequest("仅支持对已完成（success）的排查执行修复");
 
   const existing = (Array.isArray(run.steps) ? run.steps : []) as DiagnosisStep[];
@@ -1714,6 +1857,9 @@ export async function executeRepair(
 }
 
 export async function stopDiagnosis(workspaceId: string, runId: string, db: DbClient) {
+  // A run that is still waiting in the queue never started: drop it from the
+  // queue so the slot is freed immediately instead of after the poll interval.
+  queue.cancelQueued(runId);
   const [row] = await db
     .update(diagnosisRuns)
     .set({ status: "stopped", finishedAt: new Date() })
@@ -1743,7 +1889,7 @@ export async function maybeStartAutoDiagnosis(
       and(
         eq(diagnosisRuns.serverId, serverId),
         eq(diagnosisRuns.trigger, "auto"),
-        eq(diagnosisRuns.status, "running"),
+        or(eq(diagnosisRuns.status, "running"), eq(diagnosisRuns.status, "queued")),
       )
     )
     .limit(1);
@@ -1782,7 +1928,7 @@ export async function maybeStartAutoDiagnosis(
 export async function listRuns(workspaceId: string, db: DbClient, limit = 50, serverId?: string) {
   const conds = [eq(diagnosisRuns.workspaceId, workspaceId)];
   if (serverId) conds.push(eq(diagnosisRuns.serverId, serverId));
-  return db
+  const rows = await db
     .select({
       id: diagnosisRuns.id,
       serverId: diagnosisRuns.serverId,
@@ -1802,6 +1948,10 @@ export async function listRuns(workspaceId: string, db: DbClient, limit = 50, se
     .where(and(...conds))
     .orderBy(desc(diagnosisRuns.createdAt))
     .limit(limit);
+  // Live queue position so the list can tell "waiting" from "running".
+  return rows.map((r) =>
+    r.status === "queued" ? { ...r, queuePosition: queue.queuePosition(r.id) } : r
+  );
 }
 
 export async function getRun(workspaceId: string, runId: string, db: DbClient) {
@@ -1818,6 +1968,7 @@ export async function getRun(workspaceId: string, runId: string, db: DbClient) {
     evidenceFingerprint: stored,
     evidenceVerified: stored ? computeEvidenceFingerprint(steps) === stored : null,
     similarCases: row.status === "success" ? await findSimilarCases(row, db) : [],
+    queuePosition: row.status === "queued" ? queue.queuePosition(runId) : 0,
   };
   return enriched;
 }

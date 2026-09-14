@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, Loader2, CheckCircle2, XCircle, Square, Workflow, Terminal as TerminalIcon, RefreshCw,
   Lightbulb, ShieldCheck, Trash2, Sparkles, Download, FileType, FileText, Wrench, ShieldAlert, Undo2,
-  History, Fingerprint,
+  History, Fingerprint, Clock3,
 } from "lucide-react";
 import { PageSkeleton } from "@/components/shared/loading-skeleton";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -21,6 +21,8 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 
 function statusBadge(r: DiagnosisRun) {
+  if (r.status === "queued")
+    return <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 border"><Clock3 className="h-3 w-3 mr-1" />排队中</Badge>;
   if (r.status === "running")
     return <Badge className="bg-blue-500/15 text-blue-400 border-blue-500/30 border"><Loader2 className="h-3 w-3 animate-spin mr-1" />排查中</Badge>;
   if (r.status === "failed")
@@ -251,17 +253,17 @@ export default function DiagnosisDetailPage() {
           {run.trigger === "auto" ? <Badge variant="outline" className="text-xs">自动触发</Badge> : <Badge variant="outline" className="text-xs">手动</Badge>}
         </div>
         <div className="ml-auto flex gap-2">
-          {run.status === "running" && (
+          {(run.status === "running" || run.status === "queued") && (
             <Button variant="outline" size="sm" onClick={doStop} disabled={stopping}>
-              {stopping ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Square className="h-4 w-4 mr-1" />}停止
+              {stopping ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Square className="h-4 w-4 mr-1" />}{run.status === "queued" ? "取消" : "停止"}
             </Button>
           )}
-          <Button variant="outline" size="sm" disabled={run.status === "running" || exporting !== null}
+          <Button variant="outline" size="sm" disabled={run.status === "running" || run.status === "queued" || exporting !== null}
             onClick={() => download("pdf")}>
             {exporting === "pdf" ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileType className="h-4 w-4 mr-1" />}
             PDF
           </Button>
-          <Button variant="outline" size="sm" disabled={run.status === "running" || exporting !== null}
+          <Button variant="outline" size="sm" disabled={run.status === "running" || run.status === "queued" || exporting !== null}
             onClick={() => download("docx")}>
             {exporting === "docx" ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileText className="h-4 w-4 mr-1" />}
             Word
@@ -485,6 +487,17 @@ export default function DiagnosisDetailPage() {
         </Card>
       )}
 
+      {run.status === "queued" && (
+        <Card className="border-amber-500/30">
+          <CardContent className="pt-4 text-sm text-amber-200 flex items-start gap-2">
+            <Clock3 className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>
+              该服务器已有排查在执行，本次已排队等待{typeof run.queuePosition === "number" && run.queuePosition > 0 ? `（前面还有 ${run.queuePosition} 个）` : ""}，轮到后自动开始多步取证。
+            </span>
+          </CardContent>
+        </Card>
+      )}
+
       {run.status === "failed" && (
         <Card className="border-red-500/30">
           <CardContent className="pt-4 text-sm text-red-300 flex items-start gap-2">
@@ -507,7 +520,7 @@ export default function DiagnosisDetailPage() {
         <div className="flex items-center gap-2">
           <TerminalIcon className="h-4 w-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold">排查时间线（{steps.length} 步）</h2>
-          {run.status === "running" && <Loader2 className="h-4 w-4 animate-spin text-blue-400" />}
+          {(run.status === "running" || run.status === "queued") && <Loader2 className="h-4 w-4 animate-spin text-blue-400" />}
           {dynamicCount > 0 && (
             <Badge variant="outline" className="text-xs text-violet-400 border-violet-500/30">
               <Sparkles className="h-3 w-3 mr-1" />自适应处理 ×{dynamicCount}
@@ -518,7 +531,7 @@ export default function DiagnosisDetailPage() {
           <Card>
             <CardContent className="pt-4 text-sm text-muted-foreground flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-              AI 正在规划第一步排查动作…
+              {run.status === "queued" ? "排队中，轮到后将自动开始取证…" : "AI 正在规划第一步排查动作…"}
             </CardContent>
           </Card>
         ) : (

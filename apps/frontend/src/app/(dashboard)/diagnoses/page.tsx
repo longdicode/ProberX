@@ -13,7 +13,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Workflow, Plus, Loader2, Trash2, RefreshCw, CircleAlert, CheckCircle2, Square, BarChart3, FileText, FileCode2, FileType } from "lucide-react";
+import { Workflow, Plus, Loader2, Trash2, RefreshCw, CircleAlert, CheckCircle2, Square, BarChart3, FileText, FileCode2, FileType, Clock3 } from "lucide-react";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageSkeleton } from "@/components/shared/loading-skeleton";
 import { useLocale } from "@/stores/locale-store";
@@ -34,6 +34,8 @@ const GOAL_TEMPLATES = [
 ];
 
 function statusBadge(r: DiagnosisRun) {
+  if (r.status === "queued")
+    return <Badge className="bg-amber-500/15 text-amber-400 border-amber-500/30 border"><Clock3 className="h-3 w-3 mr-1" />排队中</Badge>;
   if (r.status === "running")
     return <Badge className="bg-blue-500/15 text-blue-400 border-blue-500/30 border"><Loader2 className="h-3 w-3 animate-spin mr-1" />排查中</Badge>;
   if (r.status === "failed")
@@ -161,11 +163,15 @@ export default function DiagnosesPage() {
     }
     setStarting(true);
     try {
-      const res = await api.post<{ id: string; status: string }>(
+      const res = await api.post<{ id: string; status: string; queuePosition?: number }>(
         `/workspaces/${current.id}/servers/${serverId}/diagnoses`,
         { goal: goal.trim() }
       );
-      toast.success("自主排查已启动，AI 正在多步取证定位根因…");
+      if (res.status === "queued") {
+        toast.success(`该服务器已有排查在执行，本次已加入队列（前面还有 ${res.queuePosition ?? 1} 个）`);
+      } else {
+        toast.success("自主排查已启动，AI 正在多步取证定位根因…");
+      }
       setOpen(false);
       setGoal("");
       refetch();
@@ -410,6 +416,10 @@ export default function DiagnosesPage() {
                           置信度 {r.confidence ?? "—"}%
                         </span>
                       </>
+                    ) : r.status === "queued" ? (
+                      <span className="inline-flex items-center gap-1 text-amber-400">
+                        <Clock3 className="h-4 w-4" />排队中，等待其他排查完成
+                      </span>
                     ) : r.status === "running" ? (
                       <span className="inline-flex items-center gap-1 text-blue-400">
                         <Loader2 className="h-4 w-4 animate-spin" />{r.steps?.length ?? 0} 步进行中

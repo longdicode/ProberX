@@ -7,6 +7,13 @@ import { startDiagnosisBody } from "../validators/diagnosis";
 export const diagnosisRoutes: FastifyPluginAsync = async (app) => {
   const auth = { preHandler: [app.authenticate, app.guardWorkspace()] };
 
+  // The diagnosis scheduler lives in this process, so a restart kills every
+  // in-flight run. Close those rows out at boot instead of leaving them
+  // "running" (which would block their server until the stale timeout).
+  app.addHook("onReady", async () => {
+    await svc.recoverOrphanedRuns(app.db);
+  });
+
   // List runs of a workspace (optionally filtered by server)
   app.get("/workspaces/:wid/diagnoses", auth, async (req, reply) => {
     const { wid } = req.params as { wid: string };
@@ -21,11 +28,18 @@ export const diagnosisRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(await svc.listRuns(wid, app.db, 50, id));
   });
 
-  // Start an autonomous diagnosis (synchronous until finished)
+  // Start an autonomous diagnosis. The run is queued and executed in the
+  // background, so this returns immediately (202) with the run id and its
+  // queue position; the client then polls the run row for progress.
   app.post("/workspaces/:wid/servers/:id/diagnoses", auth, async (req, reply) => {
     const { wid, id } = req.params as { wid: string; id: string };
     const body = startDiagnosisBody.parse(req.body ?? {});
-    return reply.send(await svc.startDiagnosis(wid, id, body, app.db));
+    return reply.code(202).send(await svc.enqueueDiagnosis(wid, id, body, app.db));
+  });
+
+  // Queue depth and concurrency limits (diagnosis back-pressure)
+  app.get("/workspaces/:wid/diagnoses/queue", auth, async (_req, reply) => {
+    return reply.send(svc.diagnosisQueueSnapshot());
   });
 
   // Run detail
