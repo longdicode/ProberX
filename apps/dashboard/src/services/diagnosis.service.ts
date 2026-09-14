@@ -448,6 +448,10 @@ const SYSTEM_PROMPT_CORE = `你是一名资深 Linux 运维排障专家，运行
 7. 自动取证优先：只要问题涉及服务器/网站/服务/资源/数据的实际状态，就必须先自动调用白名单工具取证，禁止不执行任何工具就凭经验或模型知识直接下结论。
 8. 参数不全时不要反问用户：先用发现类工具（web_stack/files/network/services/processes/mysql/dns_check 等）自动定位候选域名/目录/服务/库，再继续取证；只有所有自动发现手段都用尽时才可 stop。
 9. 提供多轮上下文时延续上一轮结论继续验证或收尾，不要重复已确认内容；reason 需写明依据的证据或待验证点。
+10. 根因一旦被直接证据确认（例如已确认某容器 Exited 且其端口无监听、某服务 failed 且其端口无监听），立即用 decision=conclude 收尾。继续 investigate 的前提只有一个：存在一个尚未验证、且会改变根因判断的关键疑点。
+11. 禁止用 files/cat_file 盲目试探路径（例如依次 ls /、/opt、/root 去找项目目录）。仅当前序证据已给出该路径、或需要读取已知配置/日志文件时才使用；路径不存在、或最近两次取证未产生新证据时，立即放弃该方向，不要换个目录继续猜。
+12. 系统会在用户提示中告知剩余取证步数。剩余步数不足以再验证一个关键疑点时必须立即 conclude；不要为了用完步数而继续取证，也不要把"还想了解部署方式/背景"当作继续取证的理由。
+13. 结论若涉及用户可感知的现象（网站/接口打不开、访问失败、超时、报错），必须先对该现象本身做一次直接探测（用 http_check 探测用户给出的 URL）再下结论；不得仅凭"端口未监听"或"容器已退出"就断言用户看到的现象。
 
 可用工具：
 ${TOOL_DESCS}
@@ -571,7 +575,8 @@ function buildUserPrompt(
   host: string,
   steps: DiagnosisStep[],
   gateNote = "",
-  memoryNote = ""
+  memoryNote = "",
+  remainingSteps?: number
 ): string {
   const history = steps.length
     ? steps
@@ -586,7 +591,11 @@ function buildUserPrompt(
         .join("\n\n")
     : "（尚无已执行步骤）";
   const note = gateNote ? `${gateNote}\n\n` : "";
-  return `待排查问题：${goal}\n目标服务器：${serverName}（${host || "未配置主机名"}）\n\n${note}已经执行的排查步骤：\n${history}${memoryNote}\n\n请输出下一个行动（JSON）。`;
+  const budget =
+    remainingSteps == null
+      ? ""
+      : `\n剩余取证步数：${remainingSteps} 步（用尽后系统将强制要求给出结论）。`;
+  return `待排查问题：${goal}\n目标服务器：${serverName}（${host || "未配置主机名"}）${budget}\n\n${note}已经执行的排查步骤：\n${history}${memoryNote}\n\n请输出下一个行动（JSON）。`;
 }
 
 // PostgreSQL jsonb cannot store \\u0000 (NUL). Command output such as
@@ -1111,7 +1120,15 @@ export async function executeDiagnosisRun(
         return { id: runId, status: "stopped" as const };
       }
 
-      const user = buildUserPrompt(opts.goal, server.name, host, steps, gateNote, memoryNoteFull);
+      const user = buildUserPrompt(
+        opts.goal,
+        server.name,
+        host,
+        steps,
+        gateNote,
+        memoryNoteFull,
+        Math.max(0, MAX_STEPS - steps.length)
+      );
       let parsed: PlannerOut | null = null;
       let plannerRetries = 0;
       for (let attempt = 0; attempt < 3; attempt++) {
@@ -1310,7 +1327,9 @@ export async function executeDiagnosisRun(
         try {
           const raw = await chatComplete({
             system: plannerSys + "\n\n注意：步骤数已用尽，请直接给出 conclusion（decision=conclude）。",
-            user: buildUserPrompt(opts.goal, server.name, host, steps, gateNote, memoryNoteFull) + "\n\n步骤数已用尽，请直接输出 conclude 结论，不要输出 investigate。",
+            user:
+              buildUserPrompt(opts.goal, server.name, host, steps, gateNote, memoryNoteFull, 0) +
+              "\n\n步骤数已用尽，请直接输出 conclude 结论，不要输出 investigate。",
             apiUrl: llm.apiUrl,
             apiKey: llm.apiKey,
             model: llm.model,
