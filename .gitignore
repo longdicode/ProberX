@@ -46,3 +46,5 @@ apps/frontend/AGENTS.md
 .tmp_*.py
 .tmp_*.ts
 .tmp_uni.js
+# Competition submission material (not product source)
+/competition/
